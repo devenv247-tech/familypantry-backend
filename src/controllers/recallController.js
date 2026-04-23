@@ -2,31 +2,39 @@ const prisma = require('../utils/prisma')
 
 const HEALTH_CANADA_URL = 'https://recalls-rappels.canada.ca/sites/default/files/opendata-donneesouvertes/HCRSAMOpenData.json'
 
+const fetchRecallData = async () => {
+  const response = await fetch(HEALTH_CANADA_URL)
+  const data = await response.json()
+
+  const ninetyDaysAgo = new Date()
+  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
+
+  return data.filter(r => {
+    const isFood = (r.Category || '').toLowerCase().includes('food') ||
+                   (r.Category || '').toLowerCase().includes('multiple')
+    const date = new Date(r['Last updated'])
+    const isRecent = date >= ninetyDaysAgo
+    const isActive = r.Archived === '0'
+    return isFood && isRecent && isActive
+  })
+}
+
 exports.getRecalls = async (req, res) => {
   try {
-    const response = await fetch(HEALTH_CANADA_URL)
-    const data = await response.json()
+    const foodRecalls = await fetchRecallData()
 
-    // Filter food recalls only from last 90 days
-    const ninetyDaysAgo = new Date()
-    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
+    const formatted = foodRecalls.slice(0, 30).map(r => ({
+      id: r.NID,
+      title: r.Title,
+      date: r['Last updated'],
+      reason: r.Issue,
+      product: r.Product,
+      distribution: r.Organization,
+      url: r.URL,
+      risk: r['Recall class'],
+    }))
 
-    const foodRecalls = data
-      .filter(r => r.category?.toLowerCase().includes('food') || r.product_type?.toLowerCase().includes('food'))
-      .filter(r => new Date(r.date_published) >= ninetyDaysAgo)
-      .slice(0, 20)
-      .map(r => ({
-        id: r.recall_id || r.id,
-        title: r.title || r.product_name,
-        date: r.date_published,
-        reason: r.reason || r.hazard,
-        brand: r.brand || '',
-        distribution: r.distribution || 'National',
-        url: r.url || '',
-        risk: r.risk_level || 'Unknown',
-      }))
-
-    res.json(foodRecalls)
+    res.json(formatted)
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Failed to fetch recalls' })
@@ -37,7 +45,6 @@ exports.checkPantryMatches = async (req, res) => {
   try {
     const familyId = req.user.familyId
 
-    // Get family pantry items
     const pantryItems = await prisma.pantryItem.findMany({
       where: { familyId }
     })
@@ -46,37 +53,30 @@ exports.checkPantryMatches = async (req, res) => {
       return res.json({ matches: [], checked: 0 })
     }
 
-    // Fetch recalls
-    const response = await fetch(HEALTH_CANADA_URL)
-    const data = await response.json()
-
-    const ninetyDaysAgo = new Date()
-    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
-
-    const foodRecalls = data
-      .filter(r => r.category?.toLowerCase().includes('food') || r.product_type?.toLowerCase().includes('food'))
-      .filter(r => new Date(r.date_published) >= ninetyDaysAgo)
-
-    // Match recalls against pantry items
+    const foodRecalls = await fetchRecallData()
     const matches = []
+
     for (const recall of foodRecalls) {
-      const recallTitle = (recall.title || recall.product_name || '').toLowerCase()
-      const recallBrand = (recall.brand || '').toLowerCase()
+      const recallTitle = (recall.Title || '').toLowerCase()
+      const recallProduct = (recall.Product || '').toLowerCase()
 
       for (const item of pantryItems) {
         const itemName = item.name.toLowerCase()
-        if (
-          recallTitle.includes(itemName) ||
-          itemName.includes(recallTitle.split(' ')[0]) ||
-          (recallBrand && itemName.includes(recallBrand))
-        ) {
+        const itemWords = itemName.split(' ').filter(w => w.length > 3)
+
+        const titleMatch = recallTitle.includes(itemName) || itemName.includes(recallTitle)
+        const productMatch = recallProduct.includes(itemName) || itemName.includes(recallProduct)
+        const wordMatch = itemWords.some(word => recallTitle.includes(word) || recallProduct.includes(word))
+
+        if (titleMatch || productMatch || wordMatch) {
           matches.push({
             pantryItem: item.name,
-            recallTitle: recall.title || recall.product_name,
-            date: recall.date_published,
-            reason: recall.reason || recall.hazard,
-            risk: recall.risk_level || 'Unknown',
-            url: recall.url || '',
+            recallTitle: recall.Title,
+            product: recall.Product,
+            date: recall['Last updated'],
+            reason: recall.Issue,
+            risk: recall['Recall class'],
+            url: recall.URL,
           })
         }
       }
@@ -90,5 +90,44 @@ exports.checkPantryMatches = async (req, res) => {
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Failed to check pantry matches' })
+  }
+}
+exports.getTodaysRecalls = async (req, res) => {
+  try {
+    const response = await fetch(HEALTH_CANADA_URL)
+    const data = await response.json()
+
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    // Also get last 7 days since not every day has recalls
+    const sevenDaysAgo = new Date()
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+
+    const recentRecalls = data.filter(r => {
+      const date = new Date(r['Last updated'])
+      const isRecent = date >= sevenDaysAgo
+      const isActive = r.Archived === '0'
+      return isRecent && isActive
+    })
+
+    const formatted = recentRecalls.map(r => ({
+      id: r.NID,
+      title: r.Title,
+      date: r['Last updated'],
+      reason: r.Issue,
+      product: r.Product,
+      category: r.Category,
+      distribution: r.Organization,
+      url: r.URL,
+      risk: r['Recall class'],
+      isFood: (r.Category || '').toLowerCase().includes('food') ||
+              (r.Category || '').toLowerCase().includes('multiple'),
+    }))
+
+    res.json(formatted)
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Failed to fetch recent recalls' })
   }
 }
