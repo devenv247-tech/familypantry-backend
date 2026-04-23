@@ -57,13 +57,13 @@ exports.suggestRecipes = async (req, res) => {
     })
 
     const pantryList = pantryItems.map(i => `${i.name} (${i.quantity} ${i.unit})`).join(', ')
-    const memberDetails = memberProfiles.map(m =>
-      `${m.name}: goal=${m.goals || 'healthy eating'}, dietary=${m.dietary || 'none'}`
-    ).join('; ')
+    const memberDetails = memberProfiles.map((m, i) =>
+  `Member ${i + 1}: age=${m.age || 'unknown'}, goal=${m.goals || 'healthy eating'}, dietary=${m.dietary || 'none'}, weight=${m.weight || 'unknown'}`
+).join('; ')
 
 const prompt = `You are a helpful family meal planning assistant.
 
-Family members being cooked for: ${members.join(', ')}
+Number of people being cooked for: ${members.length}
 Member health profiles: ${memberDetails || 'No specific health data'}
 Meal type: ${mealType}
 Cuisine preference: ${cuisine || 'Any cuisine'}
@@ -188,13 +188,14 @@ exports.familyRecipe = async (req, res) => {
     }
 
     const pantryList = pantryItems.map(i => `${i.name} (${i.quantity} ${i.unit})`).join(', ')
-    const memberDetails = allMembers.map(m =>
-      `${m.name}: goal=${m.goals || 'healthy eating'}, dietary=${m.dietary || 'none'}, age=${m.age || 'unknown'}`
-    ).join('; ')
+    const memberDetails = allMembers.map((m, i) =>
+  `Member ${i + 1}: age=${m.age || 'unknown'}, goal=${m.goals || 'healthy eating'}, dietary=${m.dietary || 'none'}, weight=${m.weight || 'unknown'}`
+).join('; ')
 
 const prompt = `You are a family meal planning expert.
 
-All family members and their health profiles: ${memberDetails}
+Number of family members: ${allMembers.length}
+Health profiles (anonymized): ${memberDetails}
 Meal type: ${mealType}
 Cuisine preference: ${cuisine || 'Any cuisine'}
 Items in pantry: ${pantryList || 'Pantry is empty'}
