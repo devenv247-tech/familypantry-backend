@@ -1,12 +1,14 @@
+require('dotenv').config()
 const express = require('express')
 const cors = require('cors')
-require('dotenv').config()
+
 
 const authRoutes = require('./routes/auth')
 const familyRoutes = require('./routes/family')
 const pantryRoutes = require('./routes/pantry')
 const groceryRoutes = require('./routes/grocery')
 const reportsRoutes = require('./routes/reports')
+const recipesRoutes = require('./routes/recipes')
 
 const app = express()
 
@@ -26,6 +28,7 @@ app.use('/api/family', familyRoutes)
 app.use('/api/pantry', pantryRoutes)
 app.use('/api/grocery', groceryRoutes)
 app.use('/api/reports', reportsRoutes)
+app.use('/api/recipes', recipesRoutes)
 
 app.use((err, req, res, next) => {
   console.error(err.stack)

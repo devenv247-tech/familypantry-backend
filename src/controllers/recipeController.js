@@ -1,0 +1,82 @@
+const Anthropic = require('@anthropic-ai/sdk')
+const prisma = require('../utils/prisma')
+
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
+})
+
+exports.suggestRecipes = async (req, res) => {
+  try {
+    const { members, mealType } = req.body
+    if (!members || members.length === 0) {
+      return res.status(400).json({ error: 'Please select at least one member' })
+    }
+
+    // Get pantry items
+    const pantryItems = await prisma.pantryItem.findMany({
+      where: { familyId: req.user.familyId },
+    })
+
+    // Get member health info
+    const memberProfiles = await prisma.member.findMany({
+      where: {
+        familyId: req.user.familyId,
+        name: { in: members },
+      },
+    })
+
+    const pantryList = pantryItems.map(i => `${i.name} (${i.qty})`).join(', ')
+    const memberDetails = memberProfiles.map(m =>
+      `${m.name}: goal=${m.goals || 'healthy eating'}, dietary=${m.dietary || 'none'}`
+    ).join('; ')
+
+    const prompt = `You are a helpful family meal planning assistant.
+
+Family members being cooked for: ${members.join(', ')}
+Member health profiles: ${memberDetails || 'No specific health data'}
+Meal type: ${mealType}
+Items currently in pantry: ${pantryList || 'Pantry is empty'}
+
+Please suggest exactly 3 recipes. For each recipe provide:
+- Name
+- Description (1-2 sentences)
+- Difficulty (Easy or Medium)
+- Cooking time
+- Serves (number)
+- Tags (array of 2-3 health/diet tags)
+- Ingredients from pantry (array of ingredient names that are available)
+- Missing ingredients (array of 1-3 items needed to buy, keep minimal)
+
+Respond ONLY with a valid JSON array, no other text:
+[
+  {
+    "name": "Recipe name",
+    "description": "Brief description",
+    "difficulty": "Easy",
+    "time": "30 mins",
+    "serves": 4,
+    "icon": "🍽️",
+    "tags": ["tag1", "tag2"],
+    "ingredients": ["item1", "item2"],
+    "missing": ["item1"]
+  }
+]`
+
+    const message = await anthropic.messages.create({
+      model: 'claude-sonnet-4-5',
+      max_tokens: 1024,
+      messages: [{ role: 'user', content: prompt }],
+    })
+
+    let text = message.content[0].text.trim()
+// Remove markdown code blocks if present
+text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+const recipes = JSON.parse(text)
+    res.json(recipes)
+
+  } catch (err) {
+    console.error('Recipe error:', err.message)
+    console.error('Full error:', err)
+    res.status(500).json({ error: err.message || 'Failed to generate recipes' })
+  }
+}
