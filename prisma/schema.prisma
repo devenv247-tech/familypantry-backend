@@ -7,9 +7,12 @@ datasource db {
 }
 
 model Family {
-  id           String       @id @default(cuid())
+  id           String        @id @default(cuid())
   name         String
-  createdAt    DateTime     @default(now())
+  plan         String        @default("free")
+  recipeCount  Int           @default(0)
+  recipeWeek   String?
+  createdAt    DateTime      @default(now())
   users        User[]
   members      Member[]
   pantryItems  PantryItem[]

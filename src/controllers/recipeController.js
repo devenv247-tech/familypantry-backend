@@ -5,11 +5,42 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 })
 
+const getWeekKey = () => {
+  const now = new Date()
+  const startOfYear = new Date(now.getFullYear(), 0, 1)
+  const week = Math.ceil(((now - startOfYear) / 86400000 + startOfYear.getDay() + 1) / 7)
+  return `${now.getFullYear()}-W${week}`
+}
+
 exports.suggestRecipes = async (req, res) => {
   try {
     const { members, mealType } = req.body
     if (!members || members.length === 0) {
       return res.status(400).json({ error: 'Please select at least one member' })
+    }
+
+    // Get family and check plan
+    const family = await prisma.family.findUnique({
+      where: { id: req.user.familyId }
+    })
+
+    // Check free plan limit
+    const currentWeek = getWeekKey()
+    if (family.plan === 'free') {
+      if (family.recipeWeek === currentWeek && family.recipeCount >= 5) {
+        return res.status(403).json({
+          error: 'Weekly limit reached',
+          message: 'You have used all 5 free recipe suggestions this week. Upgrade to Family plan for unlimited recipes.',
+          limitReached: true,
+        })
+      }
+      // Reset count if new week
+      if (family.recipeWeek !== currentWeek) {
+        await prisma.family.update({
+          where: { id: family.id },
+          data: { recipeCount: 0, recipeWeek: currentWeek }
+        })
+      }
     }
 
     // Get pantry items
@@ -46,6 +77,7 @@ Please suggest exactly 3 recipes. For each recipe provide:
 - Tags (array of 2-3 health/diet tags)
 - Ingredients from pantry (array of ingredient names that are available)
 - Missing ingredients (array of 1-3 items needed to buy, keep minimal)
+- Steps (array of clear cooking steps, each step as a string, minimum 4 steps)
 
 Respond ONLY with a valid JSON array, no other text:
 [
@@ -58,7 +90,8 @@ Respond ONLY with a valid JSON array, no other text:
     "icon": "🍽️",
     "tags": ["tag1", "tag2"],
     "ingredients": ["item1", "item2"],
-    "missing": ["item1"]
+    "missing": ["item1"],
+    "steps": ["Step 1 instruction", "Step 2 instruction", "Step 3 instruction", "Step 4 instruction"]
   }
 ]`
 
@@ -69,14 +102,31 @@ Respond ONLY with a valid JSON array, no other text:
     })
 
     let text = message.content[0].text.trim()
-// Remove markdown code blocks if present
-text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-const recipes = JSON.parse(text)
-    res.json(recipes)
+    text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+    const recipes = JSON.parse(text)
+
+    // Increment recipe count for free plan
+    if (family.plan === 'free') {
+      await prisma.family.update({
+        where: { id: family.id },
+        data: {
+          recipeCount: { increment: 1 },
+          recipeWeek: currentWeek,
+        }
+      })
+    }
+
+    res.json({
+      recipes,
+      usage: family.plan === 'free' ? {
+        used: (family.recipeWeek === currentWeek ? family.recipeCount : 0) + 1,
+        limit: 5,
+        plan: 'free'
+      } : { plan: family.plan }
+    })
 
   } catch (err) {
-    console.error('Recipe error:', err.message)
-    console.error('Full error:', err)
+    console.error(err)
     res.status(500).json({ error: err.message || 'Failed to generate recipes' })
   }
 }
