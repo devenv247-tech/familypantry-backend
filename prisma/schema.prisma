@@ -1,0 +1,67 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Family {
+  id           String       @id @default(cuid())
+  name         String
+  createdAt    DateTime     @default(now())
+  users        User[]
+  members      Member[]
+  pantryItems  PantryItem[]
+  groceryItems GroceryItem[]
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      String   @default("member")
+  familyId  String
+  family    Family   @relation(fields: [familyId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model Member {
+  id       String  @id @default(cuid())
+  name     String
+  role     String  @default("Member")
+  age      Int?
+  weight   String?
+  height   String?
+  goals    String?
+  dietary  String?
+  familyId String
+  family   Family  @relation(fields: [familyId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model PantryItem {
+  id       String  @id @default(cuid())
+  name     String
+  qty      String
+  category String
+  expiry   String?
+  icon     String?
+  familyId String
+  family   Family  @relation(fields: [familyId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model GroceryItem {
+  id       String  @id @default(cuid())
+  name     String
+  qty      String?
+  store    String?
+  price    String?
+  category String?
+  checked  Boolean @default(false)
+  familyId String
+  family   Family  @relation(fields: [familyId], references: [id])
+  createdAt DateTime @default(now())
+}
