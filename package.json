@@ -7,11 +7,12 @@
   "engines": {
     "node": "20.x"
   },
-  "scripts": {
-    "dev": "nodemon src/index.js",
-    "start": "node src/index.js",
-    "build": "npx prisma generate"
-  },
+ "scripts": {
+  "dev": "nodemon src/index.js",
+  "start": "node src/index.js",
+  "build": "npx prisma generate",
+  "postinstall": "npx prisma generate"
+},
   "keywords": [],
   "author": "",
   "license": "ISC",
