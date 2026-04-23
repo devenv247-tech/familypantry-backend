@@ -10,6 +10,7 @@ const groceryRoutes = require('./routes/grocery')
 const reportsRoutes = require('./routes/reports')
 const recipesRoutes = require('./routes/recipes')
 const dashboardRoutes = require('./routes/dashboard')
+const recallRoutes = require('./routes/recalls')
 
 const app = express()
 
@@ -31,6 +32,7 @@ app.use('/api/grocery', groceryRoutes)
 app.use('/api/reports', reportsRoutes)
 app.use('/api/recipes', recipesRoutes)
 app.use('/api/dashboard', dashboardRoutes)
+app.use('/api/recalls', recallRoutes)
 
 app.use((err, req, res, next) => {
   console.error(err.stack)
