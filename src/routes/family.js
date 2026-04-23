@@ -1,10 +1,11 @@
 const express = require('express')
 const router = express.Router()
 const auth = require('../middleware/auth')
+const { getMembers, addMember, updateMember, deleteMember } = require('../controllers/familyController')
 
-// Routes coming soon
-router.get('/', auth, (req, res) => {
-  res.json({ message: 'Route working' })
-})
+router.get('/members', auth, getMembers)
+router.post('/members', auth, addMember)
+router.put('/members/:id', auth, updateMember)
+router.delete('/members/:id', auth, deleteMember)
 
 module.exports = router
