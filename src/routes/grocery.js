@@ -1,10 +1,12 @@
 const express = require('express')
 const router = express.Router()
 const auth = require('../middleware/auth')
+const { getItems, addItem, updateItem, deleteItem, clearChecked } = require('../controllers/groceryController')
 
-// Routes coming soon
-router.get('/', auth, (req, res) => {
-  res.json({ message: 'Route working' })
-})
+router.get('/', auth, getItems)
+router.post('/', auth, addItem)
+router.put('/:id', auth, updateItem)
+router.delete('/clear-checked', auth, clearChecked)
+router.delete('/:id', auth, deleteItem)
 
 module.exports = router
