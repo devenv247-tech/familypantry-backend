@@ -15,14 +15,15 @@ exports.getItems = async (req, res) => {
 
 exports.addItem = async (req, res) => {
   try {
-    const { name, qty, category, expiry, icon } = req.body
-    if (!name || !qty || !category) {
-      return res.status(400).json({ error: 'Name, quantity and category are required' })
+    const { name, quantity, unit, category, expiry, icon } = req.body
+    if (!name || !category) {
+      return res.status(400).json({ error: 'Name and category are required' })
     }
     const item = await prisma.pantryItem.create({
       data: {
         name,
-        qty,
+        quantity: parseFloat(quantity) || 0,
+        unit: unit || 'pcs',
         category,
         expiry: expiry || null,
         icon: icon || '🛒',
@@ -39,14 +40,21 @@ exports.addItem = async (req, res) => {
 exports.updateItem = async (req, res) => {
   try {
     const { id } = req.params
-    const { name, qty, category, expiry, icon } = req.body
     const existing = await prisma.pantryItem.findFirst({
       where: { id, familyId: req.user.familyId }
     })
     if (!existing) return res.status(404).json({ error: 'Item not found' })
+    const { name, quantity, unit, category, expiry, icon } = req.body
     const item = await prisma.pantryItem.update({
       where: { id },
-      data: { name, qty, category, expiry, icon }
+      data: {
+        name,
+        quantity: parseFloat(quantity) || 0,
+        unit: unit || 'pcs',
+        category,
+        expiry,
+        icon,
+      }
     })
     res.json(item)
   } catch (err) {
@@ -67,5 +75,34 @@ exports.deleteItem = async (req, res) => {
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Failed to delete item' })
+  }
+}
+
+exports.subtractIngredients = async (req, res) => {
+  try {
+    const { ingredients } = req.body
+    const results = []
+    for (const ing of ingredients) {
+      const item = await prisma.pantryItem.findFirst({
+        where: {
+          familyId: req.user.familyId,
+          name: { contains: ing.name, mode: 'insensitive' }
+        }
+      })
+      if (item) {
+        const newQty = Math.max(0, item.quantity - (parseFloat(ing.quantity) || 0))
+        const updated = await prisma.pantryItem.update({
+          where: { id: item.id },
+          data: { quantity: newQty }
+        })
+        results.push({ name: ing.name, updated: true, remaining: newQty, unit: updated.unit })
+      } else {
+        results.push({ name: ing.name, updated: false, reason: 'Not found in pantry' })
+      }
+    }
+    res.json({ success: true, results })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Failed to subtract ingredients' })
   }
 }

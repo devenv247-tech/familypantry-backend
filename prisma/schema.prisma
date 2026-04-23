@@ -45,14 +45,15 @@ model Member {
 }
 
 model PantryItem {
-  id       String  @id @default(cuid())
-  name     String
-  qty      String
-  category String
-  expiry   String?
-  icon     String?
-  familyId String
-  family   Family  @relation(fields: [familyId], references: [id])
+  id        String   @id @default(cuid())
+  name      String
+  quantity  Float    @default(0)
+  unit      String   @default("pcs")
+  category  String
+  expiry    String?
+  icon      String?
+  familyId  String
+  family    Family   @relation(fields: [familyId], references: [id])
   createdAt DateTime @default(now())
 }
 

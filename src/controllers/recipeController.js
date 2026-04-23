@@ -56,7 +56,7 @@ exports.suggestRecipes = async (req, res) => {
       },
     })
 
-    const pantryList = pantryItems.map(i => `${i.name} (${i.qty})`).join(', ')
+    const pantryList = pantryItems.map(i => `${i.name} (${i.quantity} ${i.unit})`).join(', ')
     const memberDetails = memberProfiles.map(m =>
       `${m.name}: goal=${m.goals || 'healthy eating'}, dietary=${m.dietary || 'none'}`
     ).join('; ')
