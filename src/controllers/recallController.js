@@ -64,11 +64,21 @@ exports.checkPantryMatches = async (req, res) => {
         const itemName = item.name.toLowerCase()
         const itemWords = itemName.split(' ').filter(w => w.length > 3)
 
-        const titleMatch = recallTitle.includes(itemName) || itemName.includes(recallTitle)
-        const productMatch = recallProduct.includes(itemName) || itemName.includes(recallProduct)
-        const wordMatch = itemWords.some(word => recallTitle.includes(word) || recallProduct.includes(word))
+       const titleMatch = recallTitle.includes(itemName) || itemName.includes(recallTitle)
+const productMatch = recallProduct.includes(itemName) || itemName.includes(recallProduct)
 
-        if (titleMatch || productMatch || wordMatch) {
+// Only do word match if item name is specific enough (more than one word)
+const itemWordCount = itemWords.length
+const wordMatch = itemWordCount >= 2 && itemWords.every(word => 
+  recallTitle.includes(word) || recallProduct.includes(word)
+)
+
+// Avoid duplicate matches for same item + recall combo
+const alreadyMatched = matches.some(m => 
+  m.pantryItem === item.name && m.recallTitle === recall.Title
+)
+
+if ((titleMatch || productMatch || wordMatch) && !alreadyMatched) {
           matches.push({
             pantryItem: item.name,
             recallTitle: recall.Title,
