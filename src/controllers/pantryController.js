@@ -106,3 +106,27 @@ exports.subtractIngredients = async (req, res) => {
     res.status(500).json({ error: 'Failed to subtract ingredients' })
   }
 }
+exports.restockItem = async (req, res) => {
+  try {
+    const { id } = req.params
+    const { quantity } = req.body
+
+    const existing = await prisma.pantryItem.findFirst({
+      where: { id, familyId: req.user.familyId }
+    })
+
+    if (!existing) return res.status(404).json({ error: 'Item not found' })
+
+    const updated = await prisma.pantryItem.update({
+      where: { id },
+      data: {
+        quantity: existing.quantity + parseFloat(quantity),
+      }
+    })
+
+    res.json(updated)
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Failed to restock item' })
+  }
+}
