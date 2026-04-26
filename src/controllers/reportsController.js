@@ -19,6 +19,9 @@ exports.getReports = async (req, res) => {
   orderBy: { createdAt: 'desc' }
 })
 const itemsWithPrice = purchasedItems.filter(i => i.price && i.price.trim() !== '')
+console.log('familyId:', req.user.familyId)
+console.log('purchasedItems count:', purchasedItems.length)
+console.log('itemsWithPrice count:', itemsWithPrice.length)
     // Helper to parse price
     const parsePrice = (price) => {
       if (!price) return 0
@@ -127,6 +130,10 @@ exports.getAISavingsTips = async (req, res) => {
   take: 50
 })
 const itemsWithPrice = purchasedItems.filter(i => i.price && i.price.trim() !== '')
+console.log('familyId:', req.user.familyId)
+console.log('purchasedItems count:', purchasedItems.length)
+console.log('itemsWithPrice count:', itemsWithPrice.length)
+
     if (purchasedItems.length < 5) {
       return res.json({
         tips: [
