@@ -95,7 +95,7 @@ const thisMonth = Object.values(monthlySpend).slice(-1)[0] || 0
 const lastMonth = Object.values(monthlySpend).slice(-2)[0] || 0
 const avg = Object.values(monthlySpend).filter(v => v > 0).reduce((a, b) => a + b, 0) /
   (Object.values(monthlySpend).filter(v => v > 0).length || 1)
-
+res.set('Cache-Control', 'no-store')
 res.json({
   monthlySpend: Object.entries(monthlySpend).map(([month, amount]) => ({ month, amount: parseFloat(amount.toFixed(2)) })),
   categories,
