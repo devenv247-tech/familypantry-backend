@@ -1,10 +1,9 @@
 const express = require('express')
 const router = express.Router()
 const auth = require('../middleware/auth')
+const { getReports, getAISavingsTips } = require('../controllers/reportsController')
 
-// Routes coming soon
-router.get('/', auth, (req, res) => {
-  res.json({ message: 'Route working' })
-})
+router.get('/', auth, getReports)
+router.get('/tips', auth, getAISavingsTips)
 
 module.exports = router
