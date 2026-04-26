@@ -76,3 +76,20 @@ exports.login = async (req, res) => {
     res.status(500).json({ error: 'Login failed' })
   }
 }
+exports.deleteAccount = async (req, res) => {
+  try {
+    const { userId, familyId } = req.user
+
+    // Delete everything related to this family in order
+    await prisma.groceryItem.deleteMany({ where: { familyId } })
+    await prisma.pantryItem.deleteMany({ where: { familyId } })
+    await prisma.member.deleteMany({ where: { familyId } })
+    await prisma.user.deleteMany({ where: { familyId } })
+    await prisma.family.delete({ where: { id: familyId } })
+
+    res.json({ success: true, message: 'Account permanently deleted' })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Failed to delete account' })
+  }
+}
