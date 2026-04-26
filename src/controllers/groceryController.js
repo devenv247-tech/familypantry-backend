@@ -43,6 +43,14 @@ exports.updateItem = async (req, res) => {
     })
     if (!existing) return res.status(404).json({ error: 'Item not found' })
     const { name, qty, store, price, category, checked } = req.body
+
+    // If item is being checked off mark as purchased with timestamp
+    const purchaseData = {}
+    if (checked === true && !existing.purchased) {
+      purchaseData.purchased = true
+      purchaseData.purchasedAt = new Date()
+    }
+
     const item = await prisma.groceryItem.update({
       where: { id },
       data: {
@@ -52,6 +60,7 @@ exports.updateItem = async (req, res) => {
         ...(price !== undefined && { price }),
         ...(category !== undefined && { category }),
         ...(checked !== undefined && { checked }),
+        ...purchaseData,
       }
     })
     res.json(item)

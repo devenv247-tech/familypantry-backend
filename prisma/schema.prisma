@@ -59,14 +59,16 @@ model PantryItem {
 }
 
 model GroceryItem {
-  id       String  @id @default(cuid())
-  name     String
-  qty      String?
-  store    String?
-  price    String?
-  category String?
-  checked  Boolean @default(false)
-  familyId String
-  family   Family  @relation(fields: [familyId], references: [id])
-  createdAt DateTime @default(now())
+  id          String    @id @default(cuid())
+  name        String
+  qty         String?
+  store       String?
+  price       String?
+  category    String?
+  checked     Boolean   @default(false)
+  purchased   Boolean   @default(false)
+  purchasedAt DateTime?
+  familyId    String
+  family      Family    @relation(fields: [familyId], references: [id])
+  createdAt   DateTime  @default(now())
 }

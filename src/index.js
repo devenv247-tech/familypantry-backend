@@ -11,6 +11,7 @@ const reportsRoutes = require('./routes/reports')
 const recipesRoutes = require('./routes/recipes')
 const dashboardRoutes = require('./routes/dashboard')
 const recallRoutes = require('./routes/recalls')
+const reportsRoutes = require('./routes/reports')
 
 const app = express()
 
