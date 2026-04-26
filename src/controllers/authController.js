@@ -93,3 +93,46 @@ exports.deleteAccount = async (req, res) => {
     res.status(500).json({ error: 'Failed to delete account' })
   }
 }
+
+exports.updateAccount = async (req, res) => {
+  try {
+    const { userId, familyId } = req.user
+    const { name, email, familyName, password } = req.body
+
+    // Update user
+    const updateData = {}
+    if (name) updateData.name = name
+    if (email) updateData.email = email
+    if (password) {
+      if (password.length < 6) {
+        return res.status(400).json({ error: 'Password must be at least 6 characters' })
+      }
+      updateData.password = await bcrypt.hash(password, 12)
+    }
+
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: updateData,
+    })
+
+    // Update family name if provided
+    if (familyName) {
+      await prisma.family.update({
+        where: { id: familyId },
+        data: { name: familyName },
+      })
+    }
+
+    res.json({
+      success: true,
+      user: { id: user.id, name: user.name, email: user.email },
+      family: familyName ? { name: familyName } : undefined,
+    })
+  } catch (err) {
+    console.error(err)
+    if (err.code === 'P2002') {
+      return res.status(400).json({ error: 'Email already in use' })
+    }
+    res.status(500).json({ error: 'Failed to update account' })
+  }
+}
