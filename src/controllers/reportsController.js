@@ -9,13 +9,16 @@ exports.getReports = async (req, res) => {
 
     // Get all purchased items
     const purchasedItems = await prisma.groceryItem.findMany({
-      where: {
-        familyId,
-        purchased: true,
-        price: { not: null },
-      },
-      orderBy: { purchasedAt: 'desc' }
-    })
+  where: {
+    familyId,
+    OR: [
+      { purchased: true },
+      { checked: true }
+    ],
+    price: { not: null },
+  },
+  orderBy: { createdAt: 'desc' }
+})
 
     // Helper to parse price
     const parsePrice = (price) => {
@@ -116,10 +119,17 @@ exports.getAISavingsTips = async (req, res) => {
     const familyId = req.user.familyId
 
     const purchasedItems = await prisma.groceryItem.findMany({
-      where: { familyId, purchased: true, price: { not: null } },
-      orderBy: { purchasedAt: 'desc' },
-      take: 50
-    })
+  where: {
+    familyId,
+    OR: [
+      { purchased: true },
+      { checked: true }
+    ],
+    price: { not: null },
+  },
+  orderBy: { createdAt: 'desc' },
+  take: 50
+})
 
     if (purchasedItems.length < 5) {
       return res.json({
