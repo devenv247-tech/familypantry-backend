@@ -32,6 +32,31 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'FamilyPantry API running' })
 })
 
+app.get('/api/debug-token', (req, res) => {
+  const jwt = require('jsonwebtoken')
+  const header = req.headers['authorization'] || ''
+  const token = header.replace('Bearer ', '')
+  
+  if (!token) return res.json({ error: 'no token' })
+  
+  try {
+    const secret = process.env.JWT_SECRET
+    const decoded = jwt.verify(token, secret)
+    res.json({ 
+      success: true, 
+      decoded,
+      secretLength: secret?.length,
+      secretFirst5: secret?.substring(0, 5)
+    })
+  } catch (err) {
+    res.json({ 
+      error: err.message,
+      secretLength: process.env.JWT_SECRET?.length,
+      secretFirst5: process.env.JWT_SECRET?.substring(0, 5)
+    })
+  }
+})
+
 app.use('/api/auth', authRoutes)
 app.use('/api/family', familyRoutes)
 app.use('/api/pantry', pantryRoutes)
