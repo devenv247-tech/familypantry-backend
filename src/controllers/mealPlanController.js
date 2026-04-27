@@ -158,7 +158,7 @@ exports.generateGroceryFromPlan = async (req, res) => {
 }
 exports.generateWeekPlan = async (req, res) => {
   try {
-    const { weekStart } = req.body
+    const { weekStart, selectedMembers } = req.body
     const familyId = req.user.familyId
 
     const Anthropic = require('@anthropic-ai/sdk')
@@ -173,9 +173,14 @@ exports.generateWeekPlan = async (req, res) => {
       prisma.member.findMany({ where: { familyId } })
     ])
 
+    // Filter to selected members if provided, otherwise use all
+    const targetMembers = selectedMembers && selectedMembers.length > 0
+      ? allMembers.filter(m => selectedMembers.includes(m.name))
+      : allMembers
+
     const pantryList = pantryItems.map(i => `${i.name} (${i.quantity} ${i.unit})`).join(', ')
-    const memberDetails = allMembers.map((m, i) =>
-      `Member ${i + 1}: age=${m.age || 'unknown'}, goals=${m.goals || 'healthy eating'}, dietary=${m.dietary || 'none'}, allergens=${m.allergens || 'none'}`
+    const memberDetails = targetMembers.map((m, i) =>
+      `Member ${i + 1}: name=${m.name}, age=${m.age || 'unknown'}, goals=${m.goals || 'healthy eating'}, dietary=${m.dietary || 'none'}, allergens=${m.allergens || 'none'}`
     ).join('; ')
 
     const mealPatternContext = await getMealPatternContext(familyId)
@@ -183,7 +188,7 @@ exports.generateWeekPlan = async (req, res) => {
 
     const prompt = `You are a family meal planning assistant. Generate a full week meal plan.
 
-Family members: ${allMembers.length}
+Family members: ${targetMembers.length} (${targetMembers.map(m => m.name).join(', ')})
 Health profiles: ${memberDetails || 'No specific data'}
 Pantry items available: ${pantryList || 'Empty pantry'}
 
