@@ -17,6 +17,7 @@ const mealPatternRoutes = require('./routes/mealPattern')
 const budgetForecastRoutes = require('./routes/budgetForecast')
 const healthProgressRoutes = require('./routes/healthProgress')
 const priceAnomalyRoutes = require('./routes/priceAnomaly')
+const smartInsightsRoutes = require('./routes/smartInsights')
 
 
 const app = express()
@@ -53,6 +54,7 @@ app.use('/api/meal-pattern', mealPatternRoutes)
 app.use('/api/budget', budgetForecastRoutes)
 app.use('/api/health', healthProgressRoutes)
 app.use('/api/price', priceAnomalyRoutes)
+app.use('/api/insights', smartInsightsRoutes)
 app.use((err, req, res, next) => {
   console.error(err.stack)
   res.status(500).json({ error: 'Something went wrong' })
