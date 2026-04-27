@@ -1,4 +1,7 @@
 const prisma = require('../utils/prisma')
+const Anthropic = require('@anthropic-ai/sdk')
+const { getMealPatternContext } = require('./mealPatternController')
+const { getSeasonalContext } = require('../utils/seasons')
 
 const getWeekStart = (date = new Date()) => {
   const d = new Date(date)
@@ -160,11 +163,6 @@ exports.generateWeekPlan = async (req, res) => {
   try {
     const { weekStart, selectedMembers } = req.body
     const familyId = req.user.familyId
-
-    const Anthropic = require('@anthropic-ai/sdk')
-    const { getMealPatternContext } = require('./mealPatternController')
-    const { getSeasonalContext } = require('../utils/seasons')
-
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
     // Get pantry, members, patterns, seasonal context
