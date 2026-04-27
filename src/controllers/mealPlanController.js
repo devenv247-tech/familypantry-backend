@@ -218,8 +218,8 @@ ALLERGEN RULES - STRICTLY FOLLOW:
 
 QUALITY RULES - VERY IMPORTANT:
 - Every meal MUST have recipeName — never leave it blank or use "Leftover X"
-- Steps must be detailed and clear — minimum 5 steps for breakfast/snack, minimum 7 steps for lunch/dinner
-- Each step should be a complete instruction sentence, not just 2-3 words
+- Steps must be clear and detailed — minimum 4 steps per meal, maximum 6 steps
+- Each step should be one complete instruction sentence
 - Ingredients must list realistic quantities from pantry and what needs to be bought
 - Nutrition must be realistic and accurate for the meal
 - Descriptions must mention which persons health goals this serves using Person A/B/C labels
@@ -246,13 +246,7 @@ Respond ONLY with valid JSON array, no markdown, no extra text:
     "allergenWarnings": [
       {"member": "Person A", "allergen": "Milk", "ingredient": "Homo Milk"}
     ],
-    "steps": [
-      "Detailed step 1 with specific instructions",
-      "Detailed step 2 with specific instructions",
-      "Detailed step 3 with specific instructions",
-      "Detailed step 4 with specific instructions",
-      "Detailed step 5 with specific instructions"
-    ],
+    "steps": ["Step 1", "Step 2", "Step 3", "Step 4"],
     "time": "20 mins",
     "nutrition": {
       "calories": 350,
@@ -266,7 +260,7 @@ Respond ONLY with valid JSON array, no markdown, no extra text:
 
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 8000,
+      max_tokens: 16000,
       messages: [{ role: 'user', content: prompt }]
     })
 
