@@ -21,6 +21,7 @@ model Family {
   mealPlans    MealPlan[]
   usageHistory  ItemUsageHistory[]
   cookedMeals   CookedMeal[]
+  nutritionLogs  NutritionLog[]
 }
 
 model User {
@@ -110,6 +111,22 @@ model CookedMeal {
   members    String
   cookedAt   DateTime @default(now())
   rating     Int?
+  familyId   String
+  family     Family   @relation(fields: [familyId], references: [id])
+}
+model NutritionLog {
+  id         String   @id @default(cuid())
+  memberName String
+  recipeName String
+  mealType   String
+  calories   Float?
+  protein    Float?
+  carbs      Float?
+  fat        Float?
+  fiber      Float?
+  sugar      Float?
+  sodium     Float?
+  loggedAt   DateTime @default(now())
   familyId   String
   family     Family   @relation(fields: [familyId], references: [id])
 }
