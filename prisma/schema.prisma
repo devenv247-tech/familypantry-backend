@@ -41,6 +41,7 @@ model Member {
   height   String?
   goals    String?
   dietary  String?
+  allergens String?
   familyId String
   family   Family  @relation(fields: [familyId], references: [id])
   createdAt DateTime @default(now())

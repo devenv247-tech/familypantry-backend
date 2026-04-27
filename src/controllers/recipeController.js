@@ -58,7 +58,7 @@ exports.suggestRecipes = async (req, res) => {
 
     const pantryList = pantryItems.map(i => `${i.name} (${i.quantity} ${i.unit})`).join(', ')
     const memberDetails = memberProfiles.map((m, i) =>
-  `Member ${i + 1}: age=${m.age || 'unknown'}, goal=${m.goals || 'healthy eating'}, dietary=${m.dietary || 'none'}, weight=${m.weight || 'unknown'}`
+  `Member ${i + 1}: age=${m.age || 'unknown'}, goal=${m.goals || 'healthy eating'}, dietary=${m.dietary || 'none'}, allergens=${m.allergens || 'none'}, weight=${m.weight || 'unknown'}`
 ).join('; ')
 
 const prompt = `You are a helpful family meal planning assistant.
@@ -72,7 +72,7 @@ Items currently in pantry: ${pantryList || 'Pantry is empty'}
 ${cuisine && cuisine !== 'Any cuisine' 
   ? `IMPORTANT: Suggest recipes specifically from ${cuisine} cuisine.` 
   : 'Suggest recipes from any cuisine based on available ingredients.'}
-
+CRITICAL: Check each recipe against member allergens. Never suggest recipes containing ingredients that any member is allergic to. If a member has allergens listed, strictly avoid those ingredients.
 Please suggest exactly 3 recipes. For each recipe provide:
 - Name
 - Description (1-2 sentences)
@@ -97,6 +97,7 @@ Respond ONLY with a valid JSON array, no other text:
     "ingredients": [{"name": "Chicken", "quantity": 500, "unit": "g"}],
     "missing": [{"name": "Onion", "quantity": 2, "unit": "pcs"}],
     "steps": ["Step 1", "Step 2", "Step 3", "Step 4"],
+    "allergenWarnings": [{"member": "Member 1", "allergen": "peanuts", "ingredient": "peanut oil"}],
     "nutrition": {
       "calories": 450,
       "protein": 35,
