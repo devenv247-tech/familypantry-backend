@@ -33,6 +33,8 @@ model User {
   role      String   @default("member")
   familyId  String
   family    Family   @relation(fields: [familyId], references: [id])
+  resetToken        String?
+  resetTokenExpiry  DateTime?
   createdAt DateTime @default(now())
 }
 
