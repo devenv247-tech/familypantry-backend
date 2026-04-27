@@ -179,16 +179,21 @@ exports.generateWeekPlan = async (req, res) => {
       : allMembers
 
     const pantryList = pantryItems.map(i => `${i.name} (${i.quantity} ${i.unit})`).join(', ')
-    const memberDetails = targetMembers.map((m, i) =>
-      `Member ${i + 1}: name=${m.name}, age=${m.age || 'unknown'}, goals=${m.goals || 'healthy eating'}, dietary=${m.dietary || 'none'}, allergens=${m.allergens || 'none'}`
-    ).join('; ')
+   // Privacy — use anonymous labels, never send real names to Claude
+    const memberLabels = ['Person A', 'Person B', 'Person C', 'Person D', 'Person E', 'Person F']
+    const memberMap = {} // maps label back to real name for internal use only
+    const memberDetails = targetMembers.map((m, i) => {
+      const label = memberLabels[i] || `Person ${i + 1}`
+      memberMap[label] = m.name
+      return `${label}: age=${m.age || 'unknown'}, goals=${m.goals || 'healthy eating'}, dietary=${m.dietary || 'none'}, allergens=${m.allergens || 'none'}`
+    }).join('; ')
 
     const mealPatternContext = await getMealPatternContext(familyId)
     const seasonal = getSeasonalContext()
 
     const prompt = `You are a family meal planning assistant. Generate a full week meal plan.
 
-Family members: ${targetMembers.length} (${targetMembers.map(m => m.name).join(', ')})
+Family members: ${targetMembers.length} (${Object.keys(memberMap).join(', ')})
 Health profiles: ${memberDetails || 'No specific data'}
 Pantry items available: ${pantryList || 'Empty pantry'}
 
@@ -213,9 +218,11 @@ Respond ONLY with valid JSON array, no markdown:
     "mealType": "Breakfast",
     "recipeName": "Recipe name",
     "icon": "🍽️",
-    "description": "One sentence description",
+    "description": "One sentence description using Person A/B/C labels not real names",
     "ingredients": [{"name": "item", "quantity": 1, "unit": "cup"}],
     "missing": [{"name": "item", "quantity": 1, "unit": "pcs"}],
+    "allergenWarnings": [{"member": "Person A", "allergen": "Milk", "ingredient": "Homo Milk"}],
+    "steps": ["Step 1", "Step 2", "Step 3", "Step 4"],
     "time": "15 mins",
     "calories": 350
   }
@@ -245,11 +252,17 @@ Respond ONLY with valid JSON array, no markdown:
             day: meal.day,
             mealType: meal.mealType,
             recipeName: meal.recipeName,
-            recipeData: {
+           recipeData: {
               icon: meal.icon,
               description: meal.description,
               ingredients: meal.ingredients || [],
               missing: meal.missing || [],
+              allergenWarnings: (meal.allergenWarnings || []).map(w => ({
+                ...w,
+                // Map anonymous label back to real name only on our server
+                member: memberMap[w.member] || w.member
+              })),
+              steps: meal.steps || [],
               time: meal.time,
               calories: meal.calories,
             },
