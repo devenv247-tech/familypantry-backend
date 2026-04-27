@@ -295,3 +295,64 @@ Respond ONLY with a valid JSON object, no other text:
     res.status(500).json({ error: err.message || 'Failed to generate family recipe' })
   }
 }
+exports.getSubstitutions = async (req, res) => {
+  try {
+    const { ingredientName, ingredientUnit, recipeContext } = req.body
+    const familyId = req.user.familyId
+
+    // Get current pantry
+    const pantryItems = await prisma.pantryItem.findMany({
+      where: { familyId }
+    })
+
+    const pantryList = pantryItems.map(i => `${i.name} (${i.quantity} ${i.unit})`).join(', ')
+
+    const prompt = `You are a smart cooking assistant helping find ingredient substitutions.
+
+Missing ingredient: ${ingredientName} (${ingredientUnit || 'some amount'})
+Recipe context: ${recipeContext || 'general cooking'}
+Items currently in pantry: ${pantryList || 'Pantry is empty'}
+
+Find the best substitutions for the missing ingredient.
+PRIORITY: Suggest pantry items first if they can work as substitutes.
+Then suggest easy-to-buy alternatives.
+
+Respond ONLY with valid JSON, no markdown:
+{
+  "substitutions": [
+    {
+      "name": "substitute ingredient name",
+      "ratio": "how much to use e.g. 1:1 or 3/4 cup per 1 cup",
+      "note": "one short tip about using this substitute",
+      "inPantry": true or false,
+      "quality": "perfect" or "good" or "works"
+    }
+  ],
+  "tip": "one overall cooking tip about substituting ${ingredientName}"
+}`
+
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 500,
+      messages: [{ role: 'user', content: prompt }]
+    })
+
+    let text = response.content[0].text.trim()
+    text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+    const result = JSON.parse(text)
+
+    // Mark which ones are actually in pantry
+    result.substitutions = result.substitutions.map(sub => ({
+      ...sub,
+      inPantry: pantryItems.some(p =>
+        p.name.toLowerCase().includes(sub.name.toLowerCase()) ||
+        sub.name.toLowerCase().includes(p.name.toLowerCase())
+      )
+    }))
+
+    res.json(result)
+  } catch (err) {
+    console.error('getSubstitutions error:', err)
+    res.status(500).json({ error: 'Failed to get substitutions' })
+  }
+}
