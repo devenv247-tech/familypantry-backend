@@ -1,6 +1,7 @@
 const Anthropic = require('@anthropic-ai/sdk')
 const prisma = require('../utils/prisma')
 const { getMealPatternContext } = require('./mealPatternController')
+const { getSeasonalContext } = require('../utils/seasons')
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -62,6 +63,7 @@ exports.suggestRecipes = async (req, res) => {
   `Member ${i + 1}: age=${m.age || 'unknown'}, goal=${m.goals || 'healthy eating'}, dietary=${m.dietary || 'none'}, allergens=${m.allergens || 'none'}, weight=${m.weight || 'unknown'}`
 ).join('; ')
 const mealPatternContext = await getMealPatternContext(req.user.familyId)
+const seasonal = getSeasonalContext()
 const prompt = `You are a helpful family meal planning assistant.
 
 Number of people being cooked for: ${members.length}
@@ -73,7 +75,10 @@ Items currently in pantry: ${pantryList || 'Pantry is empty'}
 ${cuisine && cuisine !== 'Any cuisine' 
   ? `IMPORTANT: Suggest recipes specifically from ${cuisine} cuisine.` 
   : 'Suggest recipes from any cuisine based on available ingredients.'}
-${mealPatternContext}  
+${mealPatternContext}
+SEASONAL GUIDANCE:
+${seasonal.context}
+
 ALLERGEN RULES - MUST FOLLOW:
 1. Member allergens are listed in their profile as "allergens=X,Y,Z"
 2. For EACH recipe, scan EVERY ingredient for allergen conflicts
@@ -203,6 +208,7 @@ exports.familyRecipe = async (req, res) => {
     const pantryList = pantryItems.map(i => `${i.name} (${i.quantity} ${i.unit})`).join(', ')
     
 const mealPatternContext = await getMealPatternContext(req.user.familyId)
+const seasonal = getSeasonalContext()
 const memberDetails = allMembers.map((m, i) =>
   `Member ${i + 1}: age=${m.age || 'unknown'}, goal=${m.goals || 'healthy eating'}, dietary=${m.dietary || 'none'}, allergens=${m.allergens || 'none'}, weight=${m.weight || 'unknown'}`
 ).join('; ')
@@ -218,6 +224,9 @@ ${cuisine && cuisine !== 'Any cuisine'
   ? `IMPORTANT: The recipe must be from ${cuisine} cuisine.`
   : 'Choose the most suitable cuisine based on the family preferences and pantry items.'}
 ${mealPatternContext}
+SEASONAL GUIDANCE:
+${seasonal.context}
+
 ALLERGEN RULES - MUST FOLLOW:
 1. Member allergens are listed in their profile as "allergens=X,Y,Z"
 2. For EACH recipe, scan EVERY ingredient for allergen conflicts
