@@ -22,6 +22,7 @@ model Family {
   usageHistory  ItemUsageHistory[]
   cookedMeals   CookedMeal[]
   nutritionLogs  NutritionLog[]
+  priceHistory   PriceHistory[]
 }
 
 model User {
@@ -127,6 +128,15 @@ model NutritionLog {
   sugar      Float?
   sodium     Float?
   loggedAt   DateTime @default(now())
+  familyId   String
+  family     Family   @relation(fields: [familyId], references: [id])
+}
+model PriceHistory {
+  id         String   @id @default(cuid())
+  itemName   String
+  price      Float
+  store      String?
+  recordedAt DateTime @default(now())
   familyId   String
   family     Family   @relation(fields: [familyId], references: [id])
 }
