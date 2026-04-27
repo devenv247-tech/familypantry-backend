@@ -201,9 +201,7 @@ exports.familyRecipe = async (req, res) => {
     }
 
     const pantryList = pantryItems.map(i => `${i.name} (${i.quantity} ${i.unit})`).join(', ')
-    const memberDetails = allMembers.map((m, i) =>
-  `Member ${i + 1}: age=${m.age || 'unknown'}, goal=${m.goals || 'healthy eating'}, dietary=${m.dietary || 'none'}, weight=${m.weight || 'unknown'}`
-).join('; ')
+    
 const mealPatternContext = await getMealPatternContext(req.user.familyId)
 const memberDetails = allMembers.map((m, i) =>
   `Member ${i + 1}: age=${m.age || 'unknown'}, goal=${m.goals || 'healthy eating'}, dietary=${m.dietary || 'none'}, allergens=${m.allergens || 'none'}, weight=${m.weight || 'unknown'}`
