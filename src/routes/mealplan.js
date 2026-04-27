@@ -5,12 +5,14 @@ const {
   getMealPlan,
   saveMeal,
   deleteMeal,
-  generateGroceryFromPlan
+  generateGroceryFromPlan,
+  generateWeekPlan
 } = require('../controllers/mealPlanController')
 
 router.get('/', auth, getMealPlan)
 router.post('/', auth, saveMeal)
 router.delete('/:id', auth, deleteMeal)
 router.post('/generate-grocery', auth, generateGroceryFromPlan)
+router.post('/generate-week', auth, generateWeekPlan)
 
 module.exports = router

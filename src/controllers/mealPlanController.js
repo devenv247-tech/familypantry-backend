@@ -156,3 +156,107 @@ exports.generateGroceryFromPlan = async (req, res) => {
     res.status(500).json({ error: 'Failed to generate grocery list' })
   }
 }
+exports.generateWeekPlan = async (req, res) => {
+  try {
+    const { weekStart } = req.body
+    const familyId = req.user.familyId
+
+    const Anthropic = require('@anthropic-ai/sdk')
+    const { getMealPatternContext } = require('./mealPatternController')
+    const { getSeasonalContext } = require('../utils/seasons')
+
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+    // Get pantry, members, patterns, seasonal context
+    const [pantryItems, allMembers] = await Promise.all([
+      prisma.pantryItem.findMany({ where: { familyId } }),
+      prisma.member.findMany({ where: { familyId } })
+    ])
+
+    const pantryList = pantryItems.map(i => `${i.name} (${i.quantity} ${i.unit})`).join(', ')
+    const memberDetails = allMembers.map((m, i) =>
+      `Member ${i + 1}: age=${m.age || 'unknown'}, goals=${m.goals || 'healthy eating'}, dietary=${m.dietary || 'none'}, allergens=${m.allergens || 'none'}`
+    ).join('; ')
+
+    const mealPatternContext = await getMealPatternContext(familyId)
+    const seasonal = getSeasonalContext()
+
+    const prompt = `You are a family meal planning assistant. Generate a full week meal plan.
+
+Family members: ${allMembers.length}
+Health profiles: ${memberDetails || 'No specific data'}
+Pantry items available: ${pantryList || 'Empty pantry'}
+
+${mealPatternContext}
+SEASONAL GUIDANCE: ${seasonal.context}
+
+Generate exactly 28 meals — one for each slot:
+- 7 days: Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday  
+- 4 meal types per day: Breakfast, Lunch, Dinner, Snack
+
+Rules:
+- Vary cuisines and styles across the week
+- Consider health goals and allergens
+- Prefer pantry ingredients where possible
+- Keep breakfast and snacks simple
+- Make dinners more substantial on weekends
+
+Respond ONLY with valid JSON array, no markdown:
+[
+  {
+    "day": "Monday",
+    "mealType": "Breakfast",
+    "recipeName": "Recipe name",
+    "icon": "🍽️",
+    "description": "One sentence description",
+    "ingredients": [{"name": "item", "quantity": 1, "unit": "cup"}],
+    "missing": [{"name": "item", "quantity": 1, "unit": "pcs"}],
+    "time": "15 mins",
+    "calories": 350
+  }
+]`
+
+    const message = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 6000,
+      messages: [{ role: 'user', content: prompt }]
+    })
+
+    let text = message.content[0].text.trim()
+    text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+    const generatedMeals = JSON.parse(text)
+
+    // Delete existing meals for this week
+    await prisma.mealPlan.deleteMany({
+      where: { familyId, weekStart }
+    })
+
+    // Save all generated meals
+    const saved = await Promise.all(
+      generatedMeals.map(meal =>
+        prisma.mealPlan.create({
+          data: {
+            weekStart,
+            day: meal.day,
+            mealType: meal.mealType,
+            recipeName: meal.recipeName,
+            recipeData: {
+              icon: meal.icon,
+              description: meal.description,
+              ingredients: meal.ingredients || [],
+              missing: meal.missing || [],
+              time: meal.time,
+              calories: meal.calories,
+            },
+            familyId
+          }
+        })
+      )
+    )
+
+    res.json({ success: true, meals: saved, count: saved.length })
+  } catch (err) {
+    console.error('generateWeekPlan error:', err)
+    res.status(500).json({ error: 'Failed to generate week plan' })
+  }
+}
