@@ -1,7 +1,6 @@
 const Anthropic = require('@anthropic-ai/sdk')
-const { PrismaClient } = require('@prisma/client')
+const prisma = require('../utils/prisma')
 
-const prisma = new PrismaClient()
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 // ─── Local lookup table (days until expiry) ───────────────────────────────────
