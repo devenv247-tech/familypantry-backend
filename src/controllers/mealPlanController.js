@@ -199,15 +199,25 @@ ${mealPatternContext}
 SEASONAL GUIDANCE: ${seasonal.context}
 
 Generate exactly 28 meals — one for each slot:
-- 7 days: Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday  
+- 7 days: Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday
 - 4 meal types per day: Breakfast, Lunch, Dinner, Snack
 
-Rules:
-- Vary cuisines and styles across the week
-- Consider health goals and allergens
-- Prefer pantry ingredients where possible
-- Keep breakfast and snacks simple
-- Make dinners more substantial on weekends
+ALLERGEN RULES - STRICTLY FOLLOW:
+1. NEVER include ingredients any person is allergic to
+2. Milk allergen: no milk, cream, butter, cheese, yogurt
+3. Eggs allergen: no eggs, mayonnaise
+4. Wheat/Gluten: no wheat, flour, bread, pasta, oats, barley
+5. Peanuts: no peanuts, peanut butter
+6. Tree nuts: no almonds, cashews, walnuts
+7. If conflict exists, still suggest but add to allergenWarnings
+
+MEAL RULES:
+- Vary cuisines across the week
+- Keep steps SHORT — max 3 steps per meal
+- Keep ingredients SHORT — max 5 ingredients per meal
+- Breakfast and snacks: simple, under 15 mins
+- Dinners on weekend: more elaborate
+- Use Person A/B/C labels in descriptions, never real names
 
 Respond ONLY with valid JSON array, no markdown:
 [
@@ -228,7 +238,7 @@ Respond ONLY with valid JSON array, no markdown:
 
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 6000,
+      max_tokens: 8000,
       messages: [{ role: 'user', content: prompt }]
     })
 
