@@ -1,5 +1,6 @@
 const Anthropic = require('@anthropic-ai/sdk')
 const prisma = require('../utils/prisma')
+const { getMealPatternContext } = require('./mealPatternController')
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -60,7 +61,7 @@ exports.suggestRecipes = async (req, res) => {
     const memberDetails = memberProfiles.map((m, i) =>
   `Member ${i + 1}: age=${m.age || 'unknown'}, goal=${m.goals || 'healthy eating'}, dietary=${m.dietary || 'none'}, allergens=${m.allergens || 'none'}, weight=${m.weight || 'unknown'}`
 ).join('; ')
-
+const mealPatternContext = await getMealPatternContext(req.user.familyId)
 const prompt = `You are a helpful family meal planning assistant.
 
 Number of people being cooked for: ${members.length}
@@ -72,6 +73,7 @@ Items currently in pantry: ${pantryList || 'Pantry is empty'}
 ${cuisine && cuisine !== 'Any cuisine' 
   ? `IMPORTANT: Suggest recipes specifically from ${cuisine} cuisine.` 
   : 'Suggest recipes from any cuisine based on available ingredients.'}
+${mealPatternContext}  
 ALLERGEN RULES - MUST FOLLOW:
 1. Member allergens are listed in their profile as "allergens=X,Y,Z"
 2. For EACH recipe, scan EVERY ingredient for allergen conflicts
@@ -202,11 +204,14 @@ exports.familyRecipe = async (req, res) => {
     const memberDetails = allMembers.map((m, i) =>
   `Member ${i + 1}: age=${m.age || 'unknown'}, goal=${m.goals || 'healthy eating'}, dietary=${m.dietary || 'none'}, weight=${m.weight || 'unknown'}`
 ).join('; ')
-
+const mealPatternContext = await getMealPatternContext(req.user.familyId)
+const memberDetails = allMembers.map((m, i) =>
+  `Member ${i + 1}: age=${m.age || 'unknown'}, goal=${m.goals || 'healthy eating'}, dietary=${m.dietary || 'none'}, allergens=${m.allergens || 'none'}, weight=${m.weight || 'unknown'}`
+).join('; ')
 const prompt = `You are a family meal planning expert.
 
 Number of family members: ${allMembers.length}
-Health profiles (anonymized): ${memberDetails}
+Health profiles: ${memberDetails}
 Meal type: ${mealType}
 Cuisine preference: ${cuisine || 'Any cuisine'}
 Items in pantry: ${pantryList || 'Pantry is empty'}
@@ -214,6 +219,17 @@ Items in pantry: ${pantryList || 'Pantry is empty'}
 ${cuisine && cuisine !== 'Any cuisine'
   ? `IMPORTANT: The recipe must be from ${cuisine} cuisine.`
   : 'Choose the most suitable cuisine based on the family preferences and pantry items.'}
+${mealPatternContext}
+ALLERGEN RULES - MUST FOLLOW:
+1. Member allergens are listed in their profile as "allergens=X,Y,Z"
+2. For EACH recipe, scan EVERY ingredient for allergen conflicts
+3. If an ingredient contains or may contain an allergen that any member has, add it to allergenWarnings
+4. Milk allergen triggers on: milk, cream, butter, cheese, paneer, yogurt, whey, casein, lactose
+5. Eggs allergen triggers on: eggs, egg white, egg yolk, mayonnaise
+6. Wheat/Gluten allergen triggers on: wheat, flour, bread, pasta, oats, barley, rye, tortilla, wrap
+7. Peanuts allergen triggers on: peanuts, peanut butter, peanut oil
+8. Tree nuts allergen triggers on: almonds, cashews, walnuts, pecans, pistachios
+9. Even if a recipe has allergen conflicts, still suggest it but populate allergenWarnings fully
 
 Create ONE perfect recipe that balances the nutritional needs and dietary restrictions of ALL family members.
 Consider everyone's health goals and dietary preferences.
@@ -234,7 +250,8 @@ Respond ONLY with a valid JSON object, no other text:
   "ingredients": [{"name": "Chicken", "quantity": 500, "unit": "g"}],
   "missing": [{"name": "Onion", "quantity": 2, "unit": "pcs"}],
  "steps": ["Step 1", "Step 2", "Step 3", "Step 4"],
-"nutrition": {
+  "allergenWarnings": [{"member": "Member 1", "allergen": "Milk", "ingredient": "Homo Milk"}],
+  "nutrition": {
   "calories": 450,
   "protein": 35,
   "carbs": 42,

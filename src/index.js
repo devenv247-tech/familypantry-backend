@@ -13,6 +13,7 @@ const dashboardRoutes = require('./routes/dashboard')
 const recallRoutes = require('./routes/recalls')
 const mealPlanRoutes = require('./routes/mealplan')
 const expiryRoutes = require('./routes/expiry')
+const mealPatternRoutes = require('./routes/mealPattern')
 
 const app = express()
 
@@ -44,7 +45,7 @@ app.use('/api/dashboard', dashboardRoutes)
 app.use('/api/recalls', recallRoutes)
 app.use('/api/mealplan', mealPlanRoutes)
 app.use('/api/expiry', expiryRoutes)
-
+app.use('/api/meal-pattern', mealPatternRoutes)
 app.use((err, req, res, next) => {
   console.error(err.stack)
   res.status(500).json({ error: 'Something went wrong' })

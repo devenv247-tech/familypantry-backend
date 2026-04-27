@@ -20,6 +20,7 @@ model Family {
   groceryItems GroceryItem[]
   mealPlans    MealPlan[]
   usageHistory  ItemUsageHistory[]
+  cookedMeals   CookedMeal[]
 }
 
 model User {
@@ -100,4 +101,15 @@ model ItemUsageHistory {
   removalReason   String?
   familyId        String
   family          Family    @relation(fields: [familyId], references: [id])
+}
+model CookedMeal {
+  id         String   @id @default(cuid())
+  recipeName String
+  mealType   String
+  cuisine    String?
+  members    String
+  cookedAt   DateTime @default(now())
+  rating     Int?
+  familyId   String
+  family     Family   @relation(fields: [familyId], references: [id])
 }
