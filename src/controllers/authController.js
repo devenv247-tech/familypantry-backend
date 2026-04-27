@@ -136,3 +136,63 @@ exports.updateAccount = async (req, res) => {
     res.status(500).json({ error: 'Failed to update account' })
   }
 }
+const crypto = require('crypto')
+
+exports.forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body
+    if (!email) return res.status(400).json({ error: 'Email is required' })
+
+    const user = await prisma.user.findUnique({ where: { email } })
+
+    if (!user) {
+      return res.json({ success: true, message: 'If that email exists, a reset link has been sent' })
+    }
+
+    const resetToken = crypto.randomBytes(32).toString('hex')
+    const resetTokenExpiry = new Date(Date.now() + 3600000)
+
+    await prisma.user.update({
+      where: { email },
+      data: { resetToken, resetTokenExpiry }
+    })
+
+    res.json({ success: true, message: 'If that email exists, a reset link has been sent' })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Failed to send reset email' })
+  }
+}
+
+exports.resetPassword = async (req, res) => {
+  try {
+    const { token, password } = req.body
+    if (!token || !password) return res.status(400).json({ error: 'Token and password are required' })
+    if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' })
+
+    const user = await prisma.user.findFirst({
+      where: {
+        resetToken: token,
+        resetTokenExpiry: { gt: new Date() }
+      }
+    })
+
+    if (!user) return res.status(400).json({ error: 'Invalid or expired reset link' })
+
+    const hashedPassword = await bcrypt.hash(password, 12)
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashedPassword,
+        resetToken: null,
+        resetTokenExpiry: null,
+      }
+    })
+
+    res.json({ success: true, message: 'Password reset successfully' })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Failed to reset password' })
+  }
+}
