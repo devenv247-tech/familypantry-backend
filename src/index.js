@@ -12,7 +12,7 @@ const recipesRoutes = require('./routes/recipes')
 const dashboardRoutes = require('./routes/dashboard')
 const recallRoutes = require('./routes/recalls')
 const mealPlanRoutes = require('./routes/mealplan')
-
+const expiryRoutes = require('./routes/expiry')
 
 const app = express()
 
@@ -43,6 +43,7 @@ app.use('/api/recipes', recipesRoutes)
 app.use('/api/dashboard', dashboardRoutes)
 app.use('/api/recalls', recallRoutes)
 app.use('/api/mealplan', mealPlanRoutes)
+app.use('/api/expiry', expiryRoutes)
 
 app.use((err, req, res, next) => {
   console.error(err.stack)

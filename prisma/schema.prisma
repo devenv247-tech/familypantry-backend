@@ -19,6 +19,7 @@ model Family {
   pantryItems  PantryItem[]
   groceryItems GroceryItem[]
   mealPlans    MealPlan[]
+  usageHistory  ItemUsageHistory[]
 }
 
 model User {
@@ -48,16 +49,19 @@ model Member {
 }
 
 model PantryItem {
-  id        String   @id @default(cuid())
-  name      String
-  quantity  Float    @default(0)
-  unit      String   @default("pcs")
-  category  String
-  expiry    String?
-  icon      String?
-  familyId  String
-  family    Family   @relation(fields: [familyId], references: [id])
-  createdAt DateTime @default(now())
+  id               String   @id @default(cuid())
+  name             String
+  quantity         Float    @default(0)
+  unit             String   @default("pcs")
+  category         String
+  expiry           String?
+  predictedExpiry  DateTime?
+  expiryConfidence String?
+  expirySource     String?  @default("manual")
+  icon             String?
+  familyId         String
+  family           Family   @relation(fields: [familyId], references: [id])
+  createdAt        DateTime @default(now())
 }
 
 model GroceryItem {
@@ -84,4 +88,16 @@ model MealPlan {
   familyId   String
   family     Family   @relation(fields: [familyId], references: [id])
   createdAt  DateTime @default(now())
+}
+model ItemUsageHistory {
+  id              String    @id @default(cuid())
+  itemName        String
+  category        String?
+  addedAt         DateTime  @default(now())
+  removedAt       DateTime?
+  predictedExpiry DateTime?
+  actualExpiry    DateTime?
+  removalReason   String?
+  familyId        String
+  family          Family    @relation(fields: [familyId], references: [id])
 }
