@@ -161,7 +161,7 @@ exports.generateGroceryFromPlan = async (req, res) => {
 }
 exports.generateWeekPlan = async (req, res) => {
   try {
-    const { weekStart, selectedMembers } = req.body
+    const { weekStart, selectedMembers, selectedCuisines } = req.body
     const familyId = req.user.familyId
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -189,7 +189,11 @@ exports.generateWeekPlan = async (req, res) => {
     const mealPatternContext = await getMealPatternContext(familyId)
     const seasonal = getSeasonalContext()
 
-    const prompt = `You are a family meal planning assistant. Generate a full week meal plan.
+    const cuisineInstruction = selectedCuisines && selectedCuisines.length > 0
+      ? `CUISINE REQUIREMENT: Rotate meals across these cuisines only: ${selectedCuisines.join(', ')}`
+      : 'CUISINE REQUIREMENT: Vary cuisines across the week — mix Punjabi, South Asian, Italian, Mexican, Canadian, Chinese, Middle Eastern'
+
+    const prompt = `You are a professional family meal planning assistant. Generate a detailed full week meal plan.
 
 Family members: ${targetMembers.length} (${Object.keys(memberMap).join(', ')})
 Health profiles: ${memberDetails || 'No specific data'}
@@ -197,42 +201,66 @@ Pantry items available: ${pantryList || 'Empty pantry'}
 
 ${mealPatternContext}
 SEASONAL GUIDANCE: ${seasonal.context}
+${cuisineInstruction}
 
 Generate exactly 28 meals — one for each slot:
 - 7 days: Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday
 - 4 meal types per day: Breakfast, Lunch, Dinner, Snack
 
 ALLERGEN RULES - STRICTLY FOLLOW:
-1. NEVER include ingredients any person is allergic to
-2. Milk allergen: no milk, cream, butter, cheese, yogurt
-3. Eggs allergen: no eggs, mayonnaise
-4. Wheat/Gluten: no wheat, flour, bread, pasta, oats, barley
-5. Peanuts: no peanuts, peanut butter
-6. Tree nuts: no almonds, cashews, walnuts
-7. If conflict exists, still suggest but add to allergenWarnings
+1. Check EVERY ingredient against EVERY person's allergens
+2. Milk allergen: no milk, cream, butter, cheese, paneer, yogurt, whey, casein, lactose
+3. Eggs allergen: no eggs, egg white, egg yolk, mayonnaise
+4. Wheat/Gluten: no wheat, flour, bread, pasta, oats, barley, rye, tortilla, wrap
+5. Peanuts: no peanuts, peanut butter, peanut oil
+6. Tree nuts: no almonds, cashews, walnuts, pecans, pistachios
+7. Even if recipe has allergen conflict, still include it but populate allergenWarnings fully
 
-MEAL RULES:
-- Vary cuisines across the week
-- Keep steps SHORT — max 3 steps per meal
-- Keep ingredients SHORT — max 5 ingredients per meal
-- Breakfast and snacks: simple, under 15 mins
-- Dinners on weekend: more elaborate
-- Use Person A/B/C labels in descriptions, never real names
+QUALITY RULES - VERY IMPORTANT:
+- Every meal MUST have recipeName — never leave it blank or use "Leftover X"
+- Steps must be detailed and clear — minimum 5 steps for breakfast/snack, minimum 7 steps for lunch/dinner
+- Each step should be a complete instruction sentence, not just 2-3 words
+- Ingredients must list realistic quantities from pantry and what needs to be bought
+- Nutrition must be realistic and accurate for the meal
+- Descriptions must mention which persons health goals this serves using Person A/B/C labels
+- Breakfast: simple, 10-20 mins
+- Snack: very simple, under 10 mins, light calories
+- Lunch: medium complexity, 20-30 mins
+- Dinner weekdays: medium, 25-40 mins
+- Dinner weekends: more elaborate, 40-60 mins
 
-Respond ONLY with valid JSON array, no markdown:
+Respond ONLY with valid JSON array, no markdown, no extra text:
 [
   {
     "day": "Monday",
     "mealType": "Breakfast",
-    "recipeName": "Recipe name",
+    "recipeName": "Full descriptive recipe name",
     "icon": "🍽️",
-    "description": "One sentence description using Person A/B/C labels not real names",
-    "ingredients": [{"name": "item", "quantity": 1, "unit": "cup"}],
-    "missing": [{"name": "item", "quantity": 1, "unit": "pcs"}],
-    "allergenWarnings": [{"member": "Person A", "allergen": "Milk", "ingredient": "Homo Milk"}],
-    "steps": ["Step 1", "Step 2", "Step 3", "Step 4"],
-    "time": "15 mins",
-    "calories": 350
+    "description": "Two sentence description mentioning Person A/B/C health goals and why this meal suits them",
+    "ingredients": [
+      {"name": "ingredient name", "quantity": 1, "unit": "cup"}
+    ],
+    "missing": [
+      {"name": "ingredient name", "quantity": 1, "unit": "pcs"}
+    ],
+    "allergenWarnings": [
+      {"member": "Person A", "allergen": "Milk", "ingredient": "Homo Milk"}
+    ],
+    "steps": [
+      "Detailed step 1 with specific instructions",
+      "Detailed step 2 with specific instructions",
+      "Detailed step 3 with specific instructions",
+      "Detailed step 4 with specific instructions",
+      "Detailed step 5 with specific instructions"
+    ],
+    "time": "20 mins",
+    "nutrition": {
+      "calories": 350,
+      "protein": 25,
+      "carbs": 40,
+      "fat": 10,
+      "fiber": 5
+    }
   }
 ]`
 
@@ -262,19 +290,19 @@ Respond ONLY with valid JSON array, no markdown:
             day: meal.day,
             mealType: meal.mealType,
             recipeName: meal.recipeName || 'Unnamed meal',
-           recipeData: {
+         recipeData: {
               icon: meal.icon,
               description: meal.description,
               ingredients: meal.ingredients || [],
               missing: meal.missing || [],
               allergenWarnings: (meal.allergenWarnings || []).map(w => ({
                 ...w,
-                // Map anonymous label back to real name only on our server
                 member: memberMap[w.member] || w.member
               })),
               steps: meal.steps || [],
               time: meal.time,
-              calories: meal.calories,
+              calories: meal.nutrition?.calories || meal.calories || null,
+              nutrition: meal.nutrition || null,
             },
             familyId
           }
