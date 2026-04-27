@@ -268,6 +268,36 @@ Respond ONLY with valid JSON array, no markdown, no extra text:
     text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
     const generatedMeals = JSON.parse(text)
 
+    // Check for missing slots and fill them in
+    const allSlots = []
+    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+    const mealTypes = ['Breakfast', 'Lunch', 'Dinner', 'Snack']
+    days.forEach(day => mealTypes.forEach(mealType => allSlots.push({ day, mealType })))
+
+    const missingSlots = allSlots.filter(slot =>
+      !generatedMeals.find(m => m.day === slot.day && m.mealType === slot.mealType)
+    )
+
+    // Fill missing slots with simple fallback meals
+    const fallbackMeals = {
+      Breakfast: { recipeName: 'Simple Oat Bowl', icon: '🥣', description: 'A quick nutritious breakfast.', steps: ['Cook oats with water for 3 minutes.', 'Add your favourite toppings.', 'Serve warm.'], time: '5 mins', nutrition: { calories: 300, protein: 10, carbs: 50, fat: 5, fiber: 5 } },
+      Lunch: { recipeName: 'Mixed Veggie Salad', icon: '🥗', description: 'A light and refreshing lunch.', steps: ['Chop vegetables of your choice.', 'Mix in a bowl with olive oil.', 'Season with salt and pepper.', 'Serve fresh.'], time: '10 mins', nutrition: { calories: 250, protein: 8, carbs: 30, fat: 8, fiber: 6 } },
+      Dinner: { recipeName: 'Simple Rice and Dal', icon: '🍛', description: 'A comforting wholesome dinner.', steps: ['Rinse rice and dal thoroughly.', 'Cook rice in 2 cups water until fluffy.', 'Boil dal with turmeric and salt.', 'Temper with cumin and garlic.', 'Serve hot together.'], time: '30 mins', nutrition: { calories: 450, protein: 18, carbs: 75, fat: 6, fiber: 8 } },
+      Snack: { recipeName: 'Fresh Fruit Bowl', icon: '🍎', description: 'A light healthy snack.', steps: ['Wash and cut fresh fruits.', 'Arrange in a bowl.', 'Serve immediately.'], time: '5 mins', nutrition: { calories: 120, protein: 2, carbs: 28, fat: 1, fiber: 4 } },
+    }
+
+    missingSlots.forEach(slot => {
+      const fallback = fallbackMeals[slot.mealType]
+      generatedMeals.push({
+        day: slot.day,
+        mealType: slot.mealType,
+        ...fallback,
+        ingredients: [],
+        missing: [],
+        allergenWarnings: [],
+      })
+    })
+
     // Delete existing meals for this week
     await prisma.mealPlan.deleteMany({
       where: { familyId, weekStart }
