@@ -72,7 +72,17 @@ Items currently in pantry: ${pantryList || 'Pantry is empty'}
 ${cuisine && cuisine !== 'Any cuisine' 
   ? `IMPORTANT: Suggest recipes specifically from ${cuisine} cuisine.` 
   : 'Suggest recipes from any cuisine based on available ingredients.'}
-CRITICAL: Check each recipe against member allergens. Never suggest recipes containing ingredients that any member is allergic to. If a member has allergens listed, strictly avoid those ingredients.
+ALLERGEN RULES - MUST FOLLOW:
+1. Member allergens are listed in their profile as "allergens=X,Y,Z"
+2. For EACH recipe, scan EVERY ingredient for allergen conflicts
+3. If an ingredient contains or may contain an allergen that any member has, add it to allergenWarnings
+4. Example: if Member 1 has allergens=Milk and recipe uses "Homo Milk" → allergenWarnings should include: {"member": "Member 1", "allergen": "Milk", "ingredient": "Homo Milk"}
+5. Milk allergen triggers on: milk, cream, butter, cheese, paneer, yogurt, whey, casein, lactose
+6. Eggs allergen triggers on: eggs, egg white, egg yolk, mayonnaise
+7. Wheat/Gluten allergen triggers on: wheat, flour, bread, pasta, oats, barley, rye, tortilla, wrap
+8. Peanuts allergen triggers on: peanuts, peanut butter, peanut oil
+9. Tree nuts allergen triggers on: almonds, cashews, walnuts, pecans, pistachios
+10. Even if a recipe has allergen conflicts, still suggest it but populate allergenWarnings fully
 Please suggest exactly 3 recipes. For each recipe provide:
 - Name
 - Description (1-2 sentences)
