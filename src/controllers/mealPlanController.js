@@ -252,14 +252,16 @@ Respond ONLY with valid JSON array, no markdown:
     })
 
     // Save all generated meals
+    // Save all generated meals — filter out any without required fields
+    const validMeals = generatedMeals.filter(meal => meal.day && meal.mealType && meal.recipeName)
     const saved = await Promise.all(
-      generatedMeals.map(meal =>
+      validMeals.map(meal =>
         prisma.mealPlan.create({
           data: {
             weekStart,
             day: meal.day,
             mealType: meal.mealType,
-            recipeName: meal.recipeName,
+            recipeName: meal.recipeName || 'Unnamed meal',
            recipeData: {
               icon: meal.icon,
               description: meal.description,
