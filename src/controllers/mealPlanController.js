@@ -40,7 +40,6 @@ exports.saveMeal = async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' })
     }
 
-    // Upsert — replace if exists for same slot
     const existing = await prisma.mealPlan.findFirst({
       where: {
         familyId: req.user.familyId,
@@ -95,6 +94,16 @@ exports.generateGroceryFromPlan = async (req, res) => {
   try {
     const { weekStart } = req.body
 
+    // Premium only feature
+    const family = await prisma.family.findUnique({ where: { id: req.user.familyId } })
+    if (family.plan !== 'premium') {
+      return res.status(403).json({
+        error: 'Premium feature',
+        message: 'Adding meal plan to grocery list is available on the Premium plan ($15/mo).',
+        limitReached: true
+      })
+    }
+
     const meals = await prisma.mealPlan.findMany({
       where: {
         familyId: req.user.familyId,
@@ -106,7 +115,6 @@ exports.generateGroceryFromPlan = async (req, res) => {
       return res.status(400).json({ error: 'No meals planned for this week' })
     }
 
-    // Collect all missing ingredients from all planned meals
     const allMissing = []
     for (const meal of meals) {
       const recipeData = meal.recipeData
@@ -119,7 +127,6 @@ exports.generateGroceryFromPlan = async (req, res) => {
       }
     }
 
-    // Deduplicate
     const seen = new Set()
     const unique = allMissing.filter(item => {
       if (seen.has(item.name.toLowerCase())) return false
@@ -127,7 +134,6 @@ exports.generateGroceryFromPlan = async (req, res) => {
       return true
     })
 
-    // Add to grocery list
     const added = []
     for (const item of unique) {
       const existing = await prisma.groceryItem.findFirst({
@@ -159,27 +165,38 @@ exports.generateGroceryFromPlan = async (req, res) => {
     res.status(500).json({ error: 'Failed to generate grocery list' })
   }
 }
+
 exports.generateWeekPlan = async (req, res) => {
   try {
     const { weekStart, selectedMembers, selectedCuisines } = req.body
     const familyId = req.user.familyId
+
+    // Premium only feature
+    const family = await prisma.family.findUnique({ where: { id: familyId } })
+    if (family.plan !== 'premium') {
+      return res.status(403).json({
+        error: 'Premium feature',
+        message: 'AI auto meal planning is available on the Premium plan ($15/mo). Upgrade to generate a full week of personalized meals.',
+        limitReached: true
+      })
+    }
+
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-    // Get pantry, members, patterns, seasonal context
     const [pantryItems, allMembers] = await Promise.all([
       prisma.pantryItem.findMany({ where: { familyId } }),
       prisma.member.findMany({ where: { familyId } })
     ])
 
-    // Filter to selected members if provided, otherwise use all
     const targetMembers = selectedMembers && selectedMembers.length > 0
       ? allMembers.filter(m => selectedMembers.includes(m.name))
       : allMembers
 
     const pantryList = pantryItems.map(i => `${i.name} (${i.quantity} ${i.unit})`).join(', ')
-   // Privacy — use anonymous labels, never send real names to Claude
+
+    // Privacy — use anonymous labels, never send real names to Claude
     const memberLabels = ['Person A', 'Person B', 'Person C', 'Person D', 'Person E', 'Person F']
-    const memberMap = {} // maps label back to real name for internal use only
+    const memberMap = {}
     const memberDetails = targetMembers.map((m, i) => {
       const label = memberLabels[i] || `Person ${i + 1}`
       memberMap[label] = m.name
@@ -278,7 +295,6 @@ Respond ONLY with valid JSON array, no markdown, no extra text:
       !generatedMeals.find(m => m.day === slot.day && m.mealType === slot.mealType)
     )
 
-    // Fill missing slots with simple fallback meals
     const fallbackMeals = {
       Breakfast: { recipeName: 'Simple Oat Bowl', icon: '🥣', description: 'A quick nutritious breakfast.', steps: ['Cook oats with water for 3 minutes.', 'Add your favourite toppings.', 'Serve warm.'], time: '5 mins', nutrition: { calories: 300, protein: 10, carbs: 50, fat: 5, fiber: 5 } },
       Lunch: { recipeName: 'Mixed Veggie Salad', icon: '🥗', description: 'A light and refreshing lunch.', steps: ['Chop vegetables of your choice.', 'Mix in a bowl with olive oil.', 'Season with salt and pepper.', 'Serve fresh.'], time: '10 mins', nutrition: { calories: 250, protein: 8, carbs: 30, fat: 8, fiber: 6 } },
@@ -303,7 +319,6 @@ Respond ONLY with valid JSON array, no markdown, no extra text:
       where: { familyId, weekStart }
     })
 
-    // Save all generated meals
     // Save all generated meals — filter out any without required fields
     const validMeals = generatedMeals.filter(meal => meal.day && meal.mealType && meal.recipeName)
     const saved = await Promise.all(
@@ -314,7 +329,7 @@ Respond ONLY with valid JSON array, no markdown, no extra text:
             day: meal.day,
             mealType: meal.mealType,
             recipeName: meal.recipeName || 'Unnamed meal',
-         recipeData: {
+            recipeData: {
               icon: meal.icon,
               description: meal.description,
               ingredients: meal.ingredients || [],
