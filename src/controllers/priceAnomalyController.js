@@ -32,6 +32,11 @@ const checkPriceAnomaly = async (req, res) => {
     const { itemName, price, store } = req.body
     const familyId = req.user.familyId
 
+    const family = await prisma.family.findUnique({ where: { id: familyId } })
+    if (family.plan === 'free') {
+      return res.json({ hasAnomaly: false, locked: true })
+    }
+
     if (!itemName || !price || parseFloat(price) <= 0) {
       return res.json({ hasAnomaly: false })
     }
@@ -106,6 +111,11 @@ const checkPriceAnomaly = async (req, res) => {
 const getPriceAlerts = async (req, res) => {
   try {
     const familyId = req.user.familyId
+
+    const family = await prisma.family.findUnique({ where: { id: familyId } })
+    if (family.plan === 'free') {
+      return res.json({ alerts: [], locked: true })
+    }
 
     // Get recent grocery items with prices
     const recentItems = await prisma.groceryItem.findMany({

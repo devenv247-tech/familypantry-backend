@@ -7,6 +7,15 @@ const getBudgetForecast = async (req, res) => {
   try {
     const familyId = req.user.familyId
 
+    const family = await prisma.family.findUnique({ where: { id: familyId } })
+    if (family.plan === 'free') {
+      return res.status(403).json({
+        error: 'Family plan feature',
+        message: 'Budget forecasting is available on the Family plan ($7/mo).',
+        limitReached: true
+      })
+    }
+
     // Get last 6 months of purchased grocery items
     const sixMonthsAgo = new Date()
     sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6)

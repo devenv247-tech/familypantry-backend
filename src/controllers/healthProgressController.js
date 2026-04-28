@@ -47,6 +47,11 @@ const logNutrition = async (req, res) => {
     const { memberNames, recipeName, mealType, nutritionPerServing } = req.body
     const familyId = req.user.familyId
 
+    const family = await prisma.family.findUnique({ where: { id: familyId } })
+    if (family.plan === 'free') {
+      return res.json({ success: true, skipped: true })
+    }
+
     if (!memberNames || memberNames.length === 0 || !nutritionPerServing) {
       return res.json({ success: true, skipped: true })
     }
@@ -82,6 +87,11 @@ const logNutrition = async (req, res) => {
 const getHealthProgress = async (req, res) => {
   try {
     const familyId = req.user.familyId
+
+    const family = await prisma.family.findUnique({ where: { id: familyId } })
+    if (family.plan === 'free') {
+      return res.json({ hasData: false, locked: true, message: 'Health goal tracking is available on the Family plan ($7/mo).' })
+    }
 
     // Get all members with their goals
     const members = await prisma.member.findMany({

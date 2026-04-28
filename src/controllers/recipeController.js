@@ -309,6 +309,15 @@ exports.getSubstitutions = async (req, res) => {
     const { ingredientName, ingredientUnit, recipeContext } = req.body
     const familyId = req.user.familyId
 
+    const family = await prisma.family.findUnique({ where: { id: familyId } })
+    if (family.plan === 'free') {
+      return res.status(403).json({
+        error: 'Family plan feature',
+        message: 'Smart substitutions are available on the Family plan ($7/mo).',
+        limitReached: true
+      })
+    }
+
     // Get current pantry
     const pantryItems = await prisma.pantryItem.findMany({
       where: { familyId }

@@ -7,6 +7,11 @@ const getPantryCO2 = async (req, res) => {
   try {
     const familyId = req.user.familyId
 
+    const family = await prisma.family.findUnique({ where: { id: familyId } })
+    if (family.plan === 'free') {
+      return res.json({ locked: true, totalCO2: 0, items: [], message: 'CO2 tracking is available on the Family plan ($7/mo).' })
+    }
+
     const items = await prisma.pantryItem.findMany({
       where: { familyId },
       orderBy: { createdAt: 'desc' }
@@ -25,6 +30,11 @@ const getPantryCO2 = async (req, res) => {
 const getCostcoRecommendations = async (req, res) => {
   try {
     const familyId = req.user.familyId
+
+    const family = await prisma.family.findUnique({ where: { id: familyId } })
+    if (family.plan === 'free') {
+      return res.json({ locked: true, hasData: false, recommendations: [], message: 'Costco optimizer is available on the Family plan ($7/mo).' })
+    }
 
     // Get pantry items
     const pantryItems = await prisma.pantryItem.findMany({
