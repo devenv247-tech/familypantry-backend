@@ -13,6 +13,8 @@ model Family {
   plan         String        @default("free")
   recipeCount  Int           @default(0)
   recipeWeek   String?
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
   createdAt    DateTime      @default(now())
   users        User[]
   members      Member[]

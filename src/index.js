@@ -2,6 +2,28 @@ require('dotenv').config()
 const express = require('express')
 const cors = require('cors')
 
+const app = express()
+
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  credentials: true,
+}))
+
+// ⚠️ Stripe webhook MUST be before express.json()
+app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), require('./controllers/stripeController').handleWebhook)
+
+app.use(express.json())
+
+app.use((req, res, next) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+  res.set('Pragma', 'no-cache')
+  res.set('Expires', '0')
+  next()
+})
+
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', message: 'FamilyPantry API running' })
+})
 
 const authRoutes = require('./routes/auth')
 const familyRoutes = require('./routes/family')
@@ -18,27 +40,7 @@ const budgetForecastRoutes = require('./routes/budgetForecast')
 const healthProgressRoutes = require('./routes/healthProgress')
 const priceAnomalyRoutes = require('./routes/priceAnomaly')
 const smartInsightsRoutes = require('./routes/smartInsights')
-
-
-const app = express()
-
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-  credentials: true,
-}))
-
-app.use(express.json())
-app.use((req, res, next) => {
-  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private')
-  res.set('Pragma', 'no-cache')
-  res.set('Expires', '0')
-  next()
-})
-
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', message: 'FamilyPantry API running' })
-})
-
+const stripeRoutes = require('./routes/stripe')
 
 app.use('/api/auth', authRoutes)
 app.use('/api/family', familyRoutes)
@@ -55,6 +57,8 @@ app.use('/api/budget', budgetForecastRoutes)
 app.use('/api/health', healthProgressRoutes)
 app.use('/api/price', priceAnomalyRoutes)
 app.use('/api/insights', smartInsightsRoutes)
+app.use('/api/stripe', stripeRoutes)
+
 app.use((err, req, res, next) => {
   console.error(err.stack)
   res.status(500).json({ error: 'Something went wrong' })
