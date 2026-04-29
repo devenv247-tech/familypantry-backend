@@ -21,6 +21,15 @@ const fetchRecallData = async () => {
 
 exports.getRecalls = async (req, res) => {
   try {
+    const family = await prisma.family.findUnique({ where: { id: req.user.familyId } })
+    if (family.plan === 'free') {
+      return res.status(403).json({
+        error: 'Family plan feature',
+        message: 'Health Canada recall alerts are available on the Family plan ($7/mo).',
+        limitReached: true
+      })
+    }
+
     const foodRecalls = await fetchRecallData()
 
     const formatted = foodRecalls.slice(0, 30).map(r => ({
@@ -44,6 +53,14 @@ exports.getRecalls = async (req, res) => {
 exports.checkPantryMatches = async (req, res) => {
   try {
     const familyId = req.user.familyId
+    const family = await prisma.family.findUnique({ where: { id: familyId } })
+    if (family.plan === 'free') {
+      return res.status(403).json({
+        error: 'Family plan feature',
+        message: 'Pantry recall matching is available on the Family plan ($7/mo).',
+        limitReached: true
+      })
+    }
 
     const pantryItems = await prisma.pantryItem.findMany({
       where: { familyId }
@@ -104,6 +121,15 @@ if ((titleMatch || productMatch || wordMatch) && !alreadyMatched) {
 }
 exports.getTodaysRecalls = async (req, res) => {
   try {
+    const family = await prisma.family.findUnique({ where: { id: req.user.familyId } })
+    if (family.plan === 'free') {
+      return res.status(403).json({
+        error: 'Family plan feature',
+        message: 'Recall alerts are available on the Family plan ($7/mo).',
+        limitReached: true
+      })
+    }
+
     const response = await fetch(HEALTH_CANADA_URL)
     const data = await response.json()
 
