@@ -251,3 +251,45 @@ exports.getUsageStats = async (req, res) => {
     res.status(500).json({ error: 'Failed to get usage stats' })
   }
 }
+// ─── Announcements ────────────────────────────────────────────────────────────
+exports.getAnnouncements = async (req, res) => {
+  try {
+    const announcements = await prisma.announcement.findMany({
+      where: { active: true },
+      orderBy: { createdAt: 'desc' }
+    })
+    res.json(announcements)
+  } catch (err) {
+    console.error('getAnnouncements error:', err)
+    res.status(500).json({ error: 'Failed to get announcements' })
+  }
+}
+
+exports.createAnnouncement = async (req, res) => {
+  try {
+    const { title, message, icon } = req.body
+    if (!title || !message) return res.status(400).json({ error: 'Title and message required' })
+
+    const announcement = await prisma.announcement.create({
+      data: { title, message, icon: icon || '🎉' }
+    })
+    res.status(201).json(announcement)
+  } catch (err) {
+    console.error('createAnnouncement error:', err)
+    res.status(500).json({ error: 'Failed to create announcement' })
+  }
+}
+
+exports.deleteAnnouncement = async (req, res) => {
+  try {
+    const { id } = req.params
+    await prisma.announcement.update({
+      where: { id },
+      data: { active: false }
+    })
+    res.json({ success: true })
+  } catch (err) {
+    console.error('deleteAnnouncement error:', err)
+    res.status(500).json({ error: 'Failed to delete announcement' })
+  }
+}

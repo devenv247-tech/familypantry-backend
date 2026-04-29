@@ -43,6 +43,8 @@ const smartInsightsRoutes = require('./routes/smartInsights')
 const stripeRoutes = require('./routes/stripe')
 const savedRecipesRoutes = require('./routes/savedRecipes')
 const adminRoutes = require('./routes/admin')
+const publicRoutes = require('./routes/public')
+
 
 app.use('/api/auth', authRoutes)
 app.use('/api/family', familyRoutes)
@@ -62,6 +64,7 @@ app.use('/api/insights', smartInsightsRoutes)
 app.use('/api/stripe', stripeRoutes)
 app.use('/api/saved-recipes', savedRecipesRoutes)
 app.use('/api/admin', adminRoutes)
+app.use('/api/app', publicRoutes)
 
 app.use((err, req, res, next) => {
   console.error(err.stack)
