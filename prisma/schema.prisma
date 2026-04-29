@@ -25,6 +25,7 @@ model Family {
   cookedMeals   CookedMeal[]
   nutritionLogs  NutritionLog[]
   priceHistory   PriceHistory[]
+  savedRecipes   SavedRecipe[]
 }
 
 model User {
@@ -143,4 +144,23 @@ model PriceHistory {
   recordedAt DateTime @default(now())
   familyId   String
   family     Family   @relation(fields: [familyId], references: [id])
+}
+model SavedRecipe {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  icon        String?
+  time        String?
+  difficulty  String?
+  serves      Int?
+  tags        Json?
+  ingredients Json?
+  missing     Json?
+  steps       Json?
+  nutrition   Json?
+  nutritionPerServing Json?
+  allergenWarnings Json?
+  familyId    String
+  family      Family   @relation(fields: [familyId], references: [id])
+  createdAt   DateTime @default(now())
 }

@@ -41,6 +41,8 @@ const healthProgressRoutes = require('./routes/healthProgress')
 const priceAnomalyRoutes = require('./routes/priceAnomaly')
 const smartInsightsRoutes = require('./routes/smartInsights')
 const stripeRoutes = require('./routes/stripe')
+const savedRecipesRoutes = require('./routes/savedRecipes')
+
 
 app.use('/api/auth', authRoutes)
 app.use('/api/family', familyRoutes)
@@ -58,6 +60,7 @@ app.use('/api/health', healthProgressRoutes)
 app.use('/api/price', priceAnomalyRoutes)
 app.use('/api/insights', smartInsightsRoutes)
 app.use('/api/stripe', stripeRoutes)
+app.use('/api/saved-recipes', savedRecipesRoutes)
 
 app.use((err, req, res, next) => {
   console.error(err.stack)
