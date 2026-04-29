@@ -40,7 +40,7 @@ exports.register = async (req, res) => {
     res.status(201).json({
       token,
       user: { id: user.id, name: user.name, email: user.email },
-      family: { id: family.id, name: family.name },
+      family: { id: family.id, name: family.name, plan: family.plan },
     })
   } catch (err) {
     console.error(err)
@@ -66,10 +66,10 @@ exports.login = async (req, res) => {
       return res.status(401).json({ error: 'Invalid email or password' })
     }
     const token = generateToken({ userId: user.id, familyId: user.familyId, email })
-    res.json({
+   res.json({
       token,
       user: { id: user.id, name: user.name, email: user.email },
-      family: { id: user.family.id, name: user.family.name },
+      family: { id: user.family.id, name: user.family.name, plan: user.family.plan },
     })
   } catch (err) {
     console.error(err)
