@@ -26,6 +26,8 @@ model Family {
   nutritionLogs  NutritionLog[]
   priceHistory   PriceHistory[]
   savedRecipes   SavedRecipe[]
+  photoScanCount   Int      @default(0)
+  photoScanMonth   String?
 }
 
 model User {
