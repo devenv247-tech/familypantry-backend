@@ -8,71 +8,75 @@ datasource db {
 }
 
 model Family {
-  id           String        @id @default(cuid())
-  name         String
-  plan         String        @default("free")
-  recipeCount  Int           @default(0)
-  recipeWeek   String?
+  id                   String             @id @default(cuid())
+  name                 String
+  plan                 String             @default("free")
+  recipeCount          Int                @default(0)
+  recipeWeek           String?
   stripeCustomerId     String?
   stripeSubscriptionId String?
-  createdAt    DateTime      @default(now())
-  users        User[]
-  members      Member[]
-  pantryItems  PantryItem[]
-  groceryItems GroceryItem[]
-  mealPlans    MealPlan[]
-  usageHistory  ItemUsageHistory[]
-  cookedMeals   CookedMeal[]
-  nutritionLogs  NutritionLog[]
-  priceHistory   PriceHistory[]
-  savedRecipes   SavedRecipe[]
-  photoScanCount   Int      @default(0)
-  photoScanMonth   String?
+  createdAt            DateTime           @default(now())
+  photoScanCount       Int                @default(0)
+  photoScanMonth       String?
+  users                User[]
+  members              Member[]
+  pantryItems          PantryItem[]
+  groceryItems         GroceryItem[]
+  mealPlans            MealPlan[]
+  usageHistory         ItemUsageHistory[]
+  cookedMeals          CookedMeal[]
+  nutritionLogs        NutritionLog[]
+  priceHistory         PriceHistory[]
+  savedRecipes         SavedRecipe[]
 }
 
 model User {
-  id        String   @id @default(cuid())
-  name      String
-  email     String   @unique
-  password  String
-  role      String   @default("member")
-  isAdmin           Boolean   @default(false)
-  familyId  String
-  family    Family   @relation(fields: [familyId], references: [id])
-  resetToken        String?
-  resetTokenExpiry  DateTime?
-  createdAt DateTime @default(now())
+  id               String    @id @default(cuid())
+  name             String
+  email            String    @unique
+  password         String
+  role             String    @default("member")
+  isAdmin          Boolean   @default(false)
+  familyId         String
+  family           Family    @relation(fields: [familyId], references: [id])
+  resetToken       String?
+  resetTokenExpiry DateTime?
+  createdAt        DateTime  @default(now())
 }
 
 model Member {
-  id       String  @id @default(cuid())
-  name     String
-  role     String  @default("Member")
-  age      Int?
-  weight   String?
-  height   String?
-  goals    String?
-  dietary  String?
-  allergens String?
-  familyId String
-  family   Family  @relation(fields: [familyId], references: [id])
-  createdAt DateTime @default(now())
+  id               String         @id @default(cuid())
+  name             String
+  role             String         @default("Member")
+  age              Int?
+  weight           Float?
+  height           String?
+  goals            String?
+  dietary          String?
+  allergens        String?
+  dailyCalorieGoal Int?
+  goalWeight       Float?
+  familyId         String
+  family           Family         @relation(fields: [familyId], references: [id])
+  nutritionLogs    NutritionLog[]
+  weightLogs       WeightLog[]
+  createdAt        DateTime       @default(now())
 }
 
 model PantryItem {
-  id               String   @id @default(cuid())
+  id               String    @id @default(cuid())
   name             String
-  quantity         Float    @default(0)
-  unit             String   @default("pcs")
+  quantity         Float     @default(0)
+  unit             String    @default("pcs")
   category         String
   expiry           String?
   predictedExpiry  DateTime?
   expiryConfidence String?
-  expirySource     String?  @default("manual")
+  expirySource     String?   @default("manual")
   icon             String?
   familyId         String
-  family           Family   @relation(fields: [familyId], references: [id])
-  createdAt        DateTime @default(now())
+  family           Family    @relation(fields: [familyId], references: [id])
+  createdAt        DateTime  @default(now())
 }
 
 model GroceryItem {
@@ -89,6 +93,7 @@ model GroceryItem {
   family      Family    @relation(fields: [familyId], references: [id])
   createdAt   DateTime  @default(now())
 }
+
 model MealPlan {
   id         String   @id @default(cuid())
   weekStart  String
@@ -100,6 +105,7 @@ model MealPlan {
   family     Family   @relation(fields: [familyId], references: [id])
   createdAt  DateTime @default(now())
 }
+
 model ItemUsageHistory {
   id              String    @id @default(cuid())
   itemName        String
@@ -112,6 +118,7 @@ model ItemUsageHistory {
   familyId        String
   family          Family    @relation(fields: [familyId], references: [id])
 }
+
 model CookedMeal {
   id         String   @id @default(cuid())
   recipeName String
@@ -123,9 +130,12 @@ model CookedMeal {
   familyId   String
   family     Family   @relation(fields: [familyId], references: [id])
 }
+
 model NutritionLog {
   id         String   @id @default(cuid())
   memberName String
+  memberId   String?
+  member     Member?  @relation(fields: [memberId], references: [id])
   recipeName String
   mealType   String
   calories   Float?
@@ -139,6 +149,7 @@ model NutritionLog {
   familyId   String
   family     Family   @relation(fields: [familyId], references: [id])
 }
+
 model PriceHistory {
   id         String   @id @default(cuid())
   itemName   String
@@ -148,25 +159,27 @@ model PriceHistory {
   familyId   String
   family     Family   @relation(fields: [familyId], references: [id])
 }
+
 model SavedRecipe {
-  id          String   @id @default(cuid())
-  name        String
-  description String?
-  icon        String?
-  time        String?
-  difficulty  String?
-  serves      Int?
-  tags        Json?
-  ingredients Json?
-  missing     Json?
-  steps       Json?
-  nutrition   Json?
+  id                  String   @id @default(cuid())
+  name                String
+  description         String?
+  icon                String?
+  time                String?
+  difficulty          String?
+  serves              Int?
+  tags                Json?
+  ingredients         Json?
+  missing             Json?
+  steps               Json?
+  nutrition           Json?
   nutritionPerServing Json?
-  allergenWarnings Json?
-  familyId    String
-  family      Family   @relation(fields: [familyId], references: [id])
-  createdAt   DateTime @default(now())
+  allergenWarnings    Json?
+  familyId            String
+  family              Family   @relation(fields: [familyId], references: [id])
+  createdAt           DateTime @default(now())
 }
+
 model FeatureFlag {
   id           String   @id @default(cuid())
   name         String   @unique
@@ -177,6 +190,7 @@ model FeatureFlag {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
+
 model Announcement {
   id        String   @id @default(cuid())
   title     String
@@ -184,4 +198,14 @@ model Announcement {
   icon      String   @default("🎉")
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
+}
+
+model WeightLog {
+  id       String   @id @default(cuid())
+  memberId String
+  member   Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  weight   Float
+  unit     String   @default("kg")
+  note     String?
+  loggedAt DateTime @default(now())
 }
