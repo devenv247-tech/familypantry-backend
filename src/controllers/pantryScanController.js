@@ -15,7 +15,15 @@ exports.scanPantryPhoto = async (req, res) => {
     if (!imageBase64) {
       return res.status(400).json({ error: 'No image provided' })
     }
-
+    // Get existing pantry for context
+    const pantryItems = await prisma.pantryItem.findMany({
+      where: { familyId },
+      select: { name: true },
+      take: 50,
+    })
+    const pantryList = pantryItems.length > 0
+      ? pantryItems.map(i => i.name).join(', ')
+      : 'No existing items yet'
     // Get family and check plan
     const family = await prisma.family.findUnique({ where: { id: familyId } })
     const plan = family.plan || 'free'
@@ -64,6 +72,7 @@ exports.scanPantryPhoto = async (req, res) => {
             {
               type: 'text',
               text: `You are a pantry inventory assistant. Analyze this image of a fridge, pantry, or kitchen and identify all visible food items.
+                     This family's existing pantry items for context (use these to help identify brands and products you see): ${pantryList}
 
 For each item you can see, provide:
 - name: common name of the item
