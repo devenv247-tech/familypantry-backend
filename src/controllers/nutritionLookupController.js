@@ -1,4 +1,5 @@
 const Anthropic = require('@anthropic-ai/sdk')
+const { handleAnthropicError } = require('../utils/anthropicError')
 
 exports.lookupNutrition = async (req, res) => {
   try {
@@ -52,8 +53,7 @@ Respond ONLY with valid JSON, no markdown:
     }
 
     res.json(nutrition)
-  } catch (err) {
-    console.error('lookupNutrition error:', err)
-    res.status(500).json({ error: 'Failed to look up nutrition' })
+ } catch (err) {
+    return handleAnthropicError(err, res)
   }
 }

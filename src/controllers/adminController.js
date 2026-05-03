@@ -293,3 +293,44 @@ exports.deleteAnnouncement = async (req, res) => {
     res.status(500).json({ error: 'Failed to delete announcement' })
   }
 }
+// ─── API Health Status ────────────────────────────────────────────────────────
+exports.getApiStatus = async (req, res) => {
+  try {
+    // Check if any AI flag description has error
+    const flags = await prisma.featureFlag.findMany({
+      where: { name: 'ai_recipes' },
+      select: { description: true, updatedAt: true }
+    })
+
+    const hasError = flags.some(f => f.description?.includes('⚠️ API ERROR'))
+    const errorFlag = flags.find(f => f.description?.includes('⚠️ API ERROR'))
+
+    // Test Anthropic API with tiny request
+    let apiAlive = true
+    let apiError = null
+    try {
+      const Anthropic = require('@anthropic-ai/sdk')
+      const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+      await anthropic.messages.create({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 10,
+        messages: [{ role: 'user', content: 'Hi' }]
+      })
+    } catch (err) {
+      apiAlive = false
+      apiError = err.message
+    }
+
+    res.json({
+      anthropic: {
+        alive: apiAlive,
+        error: apiError,
+        lastError: hasError ? errorFlag?.description : null,
+        lastChecked: new Date().toISOString(),
+      }
+    })
+  } catch (err) {
+    console.error('getApiStatus error:', err)
+    res.status(500).json({ error: 'Failed to get API status' })
+  }
+}

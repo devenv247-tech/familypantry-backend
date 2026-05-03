@@ -1,5 +1,6 @@
 const Anthropic = require('@anthropic-ai/sdk')
 const prisma = require('../utils/prisma')
+const { handleAnthropicError } = require('../utils/anthropicError')
 
 const SCAN_LIMITS = {
   free: 0,
@@ -121,9 +122,8 @@ Respond ONLY with valid JSON array, no markdown:
       scansLimit: plan === 'premium' ? null : limit,
       scansRemaining: plan === 'premium' ? null : limit - newScanCount,
     })
-  } catch (err) {
-    console.error('scanPantryPhoto error:', err)
-    res.status(500).json({ error: 'Failed to scan photo' })
+ } catch (err) {
+    return handleAnthropicError(err, res)
   }
 }
 

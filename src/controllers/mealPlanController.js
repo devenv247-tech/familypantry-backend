@@ -1,5 +1,6 @@
 const prisma = require('../utils/prisma')
 const Anthropic = require('@anthropic-ai/sdk')
+const { handleAnthropicError } = require('../utils/anthropicError')
 const { getMealPatternContext } = require('./mealPatternController')
 const { getSeasonalContext } = require('../utils/seasons')
 
@@ -350,8 +351,7 @@ Respond ONLY with valid JSON array, no markdown, no extra text:
     )
 
     res.json({ success: true, meals: saved, count: saved.length })
-  } catch (err) {
-    console.error('generateWeekPlan error:', err)
-    res.status(500).json({ error: 'Failed to generate week plan' })
+ } catch (err) {
+    return handleAnthropicError(err, res)
   }
 }
