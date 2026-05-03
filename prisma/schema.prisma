@@ -209,3 +209,22 @@ model WeightLog {
   note     String?
   loggedAt DateTime @default(now())
 }
+
+model NutritionCache {
+  id          String   @id @default(cuid())
+  searchKey   String   @unique
+  mealName    String
+  calories    Float?
+  protein     Float?
+  carbs       Float?
+  fat         Float?
+  fiber       Float?
+  sugar       Float?
+  sodium      Float?
+  servingSize String?
+  source      String?
+  confidence  String?
+  hitCount    Int      @default(1)
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime
+}
