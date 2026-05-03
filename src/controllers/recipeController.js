@@ -1,5 +1,5 @@
 const Anthropic = require('@anthropic-ai/sdk')
-const { handleAnthropicError } = require('../utils/anthropicError')
+const { handleAnthropicError, trackApiUsage } = require('../utils/anthropicError')
 const prisma = require('../utils/prisma')
 const { getMealPatternContext } = require('./mealPatternController')
 const { getSeasonalContext } = require('../utils/seasons')
@@ -14,7 +14,7 @@ const getWeekKey = () => {
   const week = Math.ceil(((now - startOfYear) / 86400000 + startOfYear.getDay() + 1) / 7)
   return `${now.getFullYear()}-W${week}`
 }
-const { handleAnthropicError, trackApiUsage } = require('../utils/anthropicError')
+
 
 const callClaude = async (anthropic, params, endpoint) => {
   const message = await anthropic.messages.create(params)
