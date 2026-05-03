@@ -296,16 +296,28 @@ exports.deleteAnnouncement = async (req, res) => {
 // ─── API Health Status ────────────────────────────────────────────────────────
 exports.getApiStatus = async (req, res) => {
   try {
-    // Check if any AI flag description has error
-    const flags = await prisma.featureFlag.findMany({
-      where: { name: 'ai_recipes' },
-      select: { description: true, updatedAt: true }
+    // Get usage data from FeatureFlag
+    const flag = await prisma.featureFlag.findUnique({
+      where: { name: 'ai_recipes' }
     })
 
-    const hasError = flags.some(f => f.description?.includes('⚠️ API ERROR'))
-    const errorFlag = flags.find(f => f.description?.includes('⚠️ API ERROR'))
+    let usageData = {}
+    let creditError = false
+    let creditErrorMsg = null
 
-    // Test Anthropic API with tiny request
+    try {
+      if (flag?.description?.startsWith('{')) {
+        const parsed = JSON.parse(flag.description)
+        if (parsed.creditError) {
+          creditError = true
+          creditErrorMsg = parsed.message
+        } else {
+          usageData = parsed
+        }
+      }
+    } catch (e) {}
+
+    // Test Anthropic API
     let apiAlive = true
     let apiError = null
     try {
@@ -316,17 +328,39 @@ exports.getApiStatus = async (req, res) => {
         max_tokens: 10,
         messages: [{ role: 'user', content: 'Hi' }]
       })
+      // If we get here, credits are fine — clear any error flags
+      if (creditError) {
+        await prisma.featureFlag.update({
+          where: { name: 'ai_recipes' },
+          data: { description: 'AI recipe generation' }
+        })
+        creditError = false
+      }
     } catch (err) {
       apiAlive = false
       apiError = err.message
     }
 
+    const currentMonth = new Date().toISOString().slice(0, 7)
+    const monthUsage = usageData[currentMonth] || { calls: 0, inputTokens: 0, outputTokens: 0, costUSD: 0, byEndpoint: {} }
+
     res.json({
       anthropic: {
         alive: apiAlive,
         error: apiError,
-        lastError: hasError ? errorFlag?.description : null,
+        creditError,
+        creditErrorMsg,
         lastChecked: new Date().toISOString(),
+      },
+      usage: {
+        thisMonth: monthUsage,
+        allTime: Object.values(usageData).reduce((acc, m) => ({
+          calls: acc.calls + (m.calls || 0),
+          costUSD: parseFloat((acc.costUSD + (m.costUSD || 0)).toFixed(4)),
+          inputTokens: acc.inputTokens + (m.inputTokens || 0),
+          outputTokens: acc.outputTokens + (m.outputTokens || 0),
+        }), { calls: 0, costUSD: 0, inputTokens: 0, outputTokens: 0 }),
+        history: Object.entries(usageData).map(([month, data]) => ({ month, ...data })).sort((a, b) => b.month.localeCompare(a.month))
       }
     })
   } catch (err) {

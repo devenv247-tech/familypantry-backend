@@ -1,4 +1,5 @@
 const Anthropic = require('@anthropic-ai/sdk')
+const { handleAnthropicError } = require('../utils/anthropicError')
 const prisma = require('../utils/prisma')
 const { getMealPatternContext } = require('./mealPatternController')
 const { getSeasonalContext } = require('../utils/seasons')
@@ -12,6 +13,13 @@ const getWeekKey = () => {
   const startOfYear = new Date(now.getFullYear(), 0, 1)
   const week = Math.ceil(((now - startOfYear) / 86400000 + startOfYear.getDay() + 1) / 7)
   return `${now.getFullYear()}-W${week}`
+}
+const { handleAnthropicError, trackApiUsage } = require('../utils/anthropicError')
+
+const callClaude = async (anthropic, params, endpoint) => {
+  const message = await anthropic.messages.create(params)
+  await trackApiUsage(endpoint, message.usage?.input_tokens || 0, message.usage?.output_tokens || 0)
+  return message
 }
 
 exports.suggestRecipes = async (req, res) => {
@@ -136,12 +144,12 @@ Respond ONLY with a valid JSON array, no other text:
   }
 ]`
 
-    const message = await anthropic.messages.create({
+    const message = await callClaude(anthropic, {
       model: 'claude-sonnet-4-5',
       max_tokens: 4000,
       messages: [{ role: 'user', content: prompt }],
-    })
-
+    }, 'suggest_recipes')
+    
     let text = message.content[0].text.trim()
     text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
     const recipes = JSON.parse(text)
@@ -167,8 +175,7 @@ Respond ONLY with a valid JSON array, no other text:
     })
 
   } catch (err) {
-    console.error(err)
-    res.status(500).json({ error: err.message || 'Failed to generate recipes' })
+    return handleAnthropicError(err, res)
   }
 }
 exports.familyRecipe = async (req, res) => {
@@ -277,11 +284,11 @@ Respond ONLY with a valid JSON object, no other text:
   "sodium": 205
 }
 }`
-    const message = await anthropic.messages.create({
+    const message = await callClaude(anthropic, {
       model: 'claude-sonnet-4-5',
       max_tokens: 1500,
       messages: [{ role: 'user', content: prompt }],
-    })
+    }, 'suggest_recipes')
 
     let text = message.content[0].text.trim()
     text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
@@ -300,8 +307,7 @@ Respond ONLY with a valid JSON object, no other text:
     res.json({ recipe })
 
   } catch (err) {
-    console.error(err)
-    res.status(500).json({ error: err.message || 'Failed to generate family recipe' })
+    return handleAnthropicError(err, res)
   }
 }
 exports.getSubstitutions = async (req, res) => {
@@ -349,11 +355,11 @@ Respond ONLY with valid JSON, no markdown:
   "tip": "one overall cooking tip about substituting ${ingredientName}"
 }`
 
-    const response = await anthropic.messages.create({
+    const response = await callClaude(anthropic, {
       model: 'claude-sonnet-4-20250514',
       max_tokens: 500,
       messages: [{ role: 'user', content: prompt }]
-    })
+    }, 'suggest_recipes')
 
     let text = response.content[0].text.trim()
     text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
@@ -370,7 +376,6 @@ Respond ONLY with valid JSON, no markdown:
 
     res.json(result)
   } catch (err) {
-    console.error('getSubstitutions error:', err)
-    res.status(500).json({ error: 'Failed to get substitutions' })
+    return handleAnthropicError(err, res)
   }
 }

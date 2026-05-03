@@ -1,6 +1,12 @@
 const Anthropic = require('@anthropic-ai/sdk')
 const prisma = require('../utils/prisma')
-const { handleAnthropicError } = require('../utils/anthropicError')
+const { handleAnthropicError, trackApiUsage } = require('../utils/anthropicError')
+
+const callClaude = async (anthropic, params, endpoint) => {
+  const message = await anthropic.messages.create(params)
+  await trackApiUsage(endpoint, message.usage?.input_tokens || 0, message.usage?.output_tokens || 0)
+  return message
+}
 
 const SCAN_LIMITS = {
   free: 0,
@@ -55,7 +61,7 @@ exports.scanPantryPhoto = async (req, res) => {
     // Call Claude Vision
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-    const message = await anthropic.messages.create({
+    const message = await callClaude(anthropic, {
       model: 'claude-sonnet-4-20250514',
       max_tokens: 2000,
       messages: [
@@ -97,8 +103,8 @@ Respond ONLY with valid JSON array, no markdown:
             }
           ]
         }
-      ]
-    })
+     ]
+    }, 'pantry_photo_scan')
 
     let text = message.content[0].text.trim()
     text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()

@@ -1,8 +1,14 @@
 const prisma = require('../utils/prisma')
 const Anthropic = require('@anthropic-ai/sdk')
-const { handleAnthropicError } = require('../utils/anthropicError')
+const { handleAnthropicError, trackApiUsage } = require('../utils/anthropicError')
 const { getMealPatternContext } = require('./mealPatternController')
 const { getSeasonalContext } = require('../utils/seasons')
+
+const callClaude = async (anthropic, params, endpoint) => {
+  const message = await anthropic.messages.create(params)
+  await trackApiUsage(endpoint, message.usage?.input_tokens || 0, message.usage?.output_tokens || 0)
+  return message
+}
 
 const getWeekStart = (date = new Date()) => {
   const d = new Date(date)
@@ -95,7 +101,6 @@ exports.generateGroceryFromPlan = async (req, res) => {
   try {
     const { weekStart } = req.body
 
-    // Premium only feature
     const family = await prisma.family.findUnique({ where: { id: req.user.familyId } })
     if (family.plan !== 'premium') {
       return res.status(403).json({
@@ -172,7 +177,6 @@ exports.generateWeekPlan = async (req, res) => {
     const { weekStart, selectedMembers, selectedCuisines } = req.body
     const familyId = req.user.familyId
 
-    // Premium only feature
     const family = await prisma.family.findUnique({ where: { id: familyId } })
     if (family.plan !== 'premium') {
       return res.status(403).json({
@@ -195,7 +199,6 @@ exports.generateWeekPlan = async (req, res) => {
 
     const pantryList = pantryItems.map(i => `${i.name} (${i.quantity} ${i.unit})`).join(', ')
 
-    // Privacy — use anonymous labels, never send real names to Claude
     const memberLabels = ['Person A', 'Person B', 'Person C', 'Person D', 'Person E', 'Person F']
     const memberMap = {}
     const memberDetails = targetMembers.map((m, i) => {
@@ -276,17 +279,16 @@ Respond ONLY with valid JSON array, no markdown, no extra text:
   }
 ]`
 
-    const message = await anthropic.messages.create({
+    const message = await callClaude(anthropic, {
       model: 'claude-sonnet-4-20250514',
       max_tokens: 16000,
       messages: [{ role: 'user', content: prompt }]
-    })
+    }, 'meal_plan_generate')
 
     let text = message.content[0].text.trim()
     text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
     const generatedMeals = JSON.parse(text)
 
-    // Check for missing slots and fill them in
     const allSlots = []
     const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
     const mealTypes = ['Breakfast', 'Lunch', 'Dinner', 'Snack']
@@ -315,12 +317,10 @@ Respond ONLY with valid JSON array, no markdown, no extra text:
       })
     })
 
-    // Delete existing meals for this week
     await prisma.mealPlan.deleteMany({
       where: { familyId, weekStart }
     })
 
-    // Save all generated meals — filter out any without required fields
     const validMeals = generatedMeals.filter(meal => meal.day && meal.mealType && meal.recipeName)
     const saved = await Promise.all(
       validMeals.map(meal =>
@@ -351,7 +351,7 @@ Respond ONLY with valid JSON array, no markdown, no extra text:
     )
 
     res.json({ success: true, meals: saved, count: saved.length })
- } catch (err) {
+  } catch (err) {
     return handleAnthropicError(err, res)
   }
 }

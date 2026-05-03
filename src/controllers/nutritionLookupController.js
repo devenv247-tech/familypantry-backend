@@ -1,5 +1,11 @@
 const Anthropic = require('@anthropic-ai/sdk')
-const { handleAnthropicError } = require('../utils/anthropicError')
+const { handleAnthropicError, trackApiUsage } = require('../utils/anthropicError')
+
+const callClaude = async (anthropic, params, endpoint) => {
+  const message = await anthropic.messages.create(params)
+  await trackApiUsage(endpoint, message.usage?.input_tokens || 0, message.usage?.output_tokens || 0)
+  return message
+}
 
 exports.lookupNutrition = async (req, res) => {
   try {
@@ -8,7 +14,7 @@ exports.lookupNutrition = async (req, res) => {
 
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-    const message = await anthropic.messages.create({
+    const message = await callClaude(anthropic, {
       model: 'claude-sonnet-4-20250514',
       max_tokens: 500,
       messages: [{
@@ -34,8 +40,8 @@ Respond ONLY with valid JSON, no markdown:
   "confidence": "high/medium/low",
   "source": "McDonald's Canada official / estimated"
 }`
-      }]
-    })
+     }]
+    }, 'nutrition_lookup')
 
     let text = message.content[0].text.trim()
     text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
