@@ -1,5 +1,17 @@
 const express = require('express')
 const router = express.Router()
+// Public endpoint — no auth needed, used by landing page
+router.get('/public/config', async (req, res) => {
+  try {
+    const flags = await prisma.featureFlag.findMany({
+      where: { enabled: true },
+      select: { name: true, description: true, requiredPlan: true }
+    })
+    res.json({ flags })
+  } catch (err) {
+    res.status(500).json({ error: 'Failed' })
+  }
+})
 const adminAuth = require('../middleware/adminAuth')
 const {
   getDashboardStats,
