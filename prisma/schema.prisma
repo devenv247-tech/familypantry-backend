@@ -49,8 +49,9 @@ model Member {
   name             String
   role             String         @default("Member")
   age              Int?
-  weight           Float?
-  height           String?
+  weight            Float?
+  weightUnit        String?   @default("kg")
+  height            String?
   goals            String?
   dietary          String?
   allergens        String?

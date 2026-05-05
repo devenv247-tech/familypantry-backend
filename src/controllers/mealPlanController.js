@@ -204,7 +204,8 @@ exports.generateWeekPlan = async (req, res) => {
     const memberDetails = targetMembers.map((m, i) => {
       const label = memberLabels[i] || `Person ${i + 1}`
       memberMap[label] = m.name
-      return `${label}: age=${m.age || 'unknown'}, goals=${m.goals || 'healthy eating'}, dietary=${m.dietary || 'none'}, allergens=${m.allergens || 'none'}`
+    const weight = m.weight ? `${m.weight}${m.weightUnit || 'kg'}` : 'unknown'
+      return `${label}: age=${m.age || 'unknown'}, weight=${weight}, height=${m.height || 'unknown'}, health goals=${m.goals || 'healthy eating'}, dietary restrictions=${m.dietary || 'none'}, allergens=${m.allergens || 'none'}`
     }).join('; ')
 
     const mealPatternContext = await getMealPatternContext(familyId)

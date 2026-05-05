@@ -67,9 +67,14 @@ exports.suggestRecipes = async (req, res) => {
     })
 
     const pantryList = pantryItems.map(i => `${i.name} (${i.quantity} ${i.unit})`).join(', ')
-    const memberDetails = memberProfiles.map((m, i) =>
-  `Member ${i + 1}: age=${m.age || 'unknown'}, goal=${m.goals || 'healthy eating'}, dietary=${m.dietary || 'none'}, allergens=${m.allergens || 'none'}, weight=${m.weight || 'unknown'}`
-).join('; ')
+    const memberDetails = members.map(m => {
+      const goals = m.goals || 'healthy eating'
+      const dietary = m.dietary || 'none'
+      const allergens = m.allergens || 'none'
+      const weight = m.weight ? `${m.weight}${m.weightUnit || 'kg'}` : 'unknown'
+      const height = m.height || 'unknown'
+      return `${m.name}: age=${m.age || 'unknown'}, weight=${weight}, height=${height}, health goals=${goals}, dietary restrictions=${dietary}, allergens=${allergens}`
+    }).join('; ')
 const mealPatternContext = await getMealPatternContext(req.user.familyId)
 const seasonal = getSeasonalContext()
 const prompt = `You are a helpful family meal planning assistant.
