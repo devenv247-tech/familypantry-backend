@@ -9,7 +9,15 @@ app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:5173',
   credentials: true,
 }))
-
+// Security headers
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  res.setHeader('X-Frame-Options', 'DENY')
+  res.setHeader('X-XSS-Protection', '1; mode=block')
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
+  res.removeHeader('X-Powered-By')
+  next()
+})
 // ⚠️ Stripe webhook MUST be before express.json()
 app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), require('./controllers/stripeController').handleWebhook)
 
@@ -112,8 +120,19 @@ app.use('/api/pantry-tools', aiLimiter, pantryToolsRoutes)
 app.use('/api/health-tracker', healthTrackerRoutes)
 
 app.use((err, req, res, next) => {
-  console.error(err.stack)
-  res.status(500).json({ error: 'Something went wrong' })
+  // Only log full stack in development
+  if (process.env.NODE_ENV !== 'production') {
+    console.error(err.stack)
+  } else {
+    console.error(`${err.message} — ${req.method} ${req.path}`)
+  }
+
+  // Never leak stack traces to client
+  res.status(err.status || 500).json({
+    error: process.env.NODE_ENV === 'production'
+      ? 'Something went wrong. Please try again.'
+      : err.message || 'Something went wrong'
+  })
 })
 
 const PORT = process.env.PORT || 3001
