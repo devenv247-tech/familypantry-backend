@@ -204,9 +204,11 @@ exports.forgotPassword = async (req, res) => {
       data: { resetToken: hashedToken, resetTokenExpiry }
     })
 
-    // In production this token would be emailed to the user
-    // For now log it so you can test
-    console.log(`Reset token for ${email}: ${resetToken}`)
+    // In production this token is emailed to the user via SendGrid
+    // Only log in development
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[DEV] Reset token for ${email}: ${resetToken}`)
+    }
 
     res.json({ success: true, message: 'If that email exists, a reset link has been sent', devToken: process.env.NODE_ENV === 'production' ? undefined : resetToken })
   } catch (err) {
