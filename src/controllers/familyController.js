@@ -15,13 +15,14 @@ exports.getMembers = async (req, res) => {
 
 exports.addMember = async (req, res) => {
   try {
-    const { name, age, weight, height, goals, dietary, allergens } = req.body
+    const { name, age, weight, weightUnit, height, goals, dietary, allergens } = req.body
     if (!name) return res.status(400).json({ error: 'Name is required' })
     const member = await prisma.member.create({
       data: {
         name,
         age: age ? parseInt(age) : null,
-        weight: weight || null,
+        weight: weight ? parseFloat(weight) : null,
+        weightUnit: weightUnit || 'kg',
         height: height || null,
         goals: goals || null,
         dietary: dietary || null,
@@ -44,13 +45,14 @@ exports.updateMember = async (req, res) => {
       where: { id, familyId: req.user.familyId }
     })
     if (!existing) return res.status(404).json({ error: 'Member not found' })
-    const { name, age, weight, height, goals, dietary, allergens } = req.body
+    const { name, age, weight, weightUnit, height, goals, dietary, allergens } = req.body
     const member = await prisma.member.update({
       where: { id },
       data: {
         name,
         age: age ? parseInt(age) : null,
-        weight: weight || null,
+        weight: weight ? parseFloat(weight) : null,
+        weightUnit: weightUnit || 'kg',
         height: height || null,
         goals: goals || null,
         dietary: dietary || null,
