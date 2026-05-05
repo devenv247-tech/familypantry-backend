@@ -149,15 +149,22 @@ exports.forgotPassword = async (req, res) => {
       return res.json({ success: true, message: 'If that email exists, a reset link has been sent' })
     }
 
-    const resetToken = crypto.randomBytes(32).toString('hex')
+  const resetToken = crypto.randomBytes(32).toString('hex')
     const resetTokenExpiry = new Date(Date.now() + 3600000)
+
+    // Hash the token before storing — plain token goes to user, hash goes to DB
+    const hashedToken = await bcrypt.hash(resetToken, 10)
 
     await prisma.user.update({
       where: { email },
-      data: { resetToken, resetTokenExpiry }
+      data: { resetToken: hashedToken, resetTokenExpiry }
     })
 
-    res.json({ success: true, message: 'If that email exists, a reset link has been sent' })
+    // In production this token would be emailed to the user
+    // For now log it so you can test
+    console.log(`Reset token for ${email}: ${resetToken}`)
+
+    res.json({ success: true, message: 'If that email exists, a reset link has been sent', devToken: process.env.NODE_ENV === 'production' ? undefined : resetToken })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Failed to send reset email' })
@@ -170,12 +177,25 @@ exports.resetPassword = async (req, res) => {
     if (!token || !password) return res.status(400).json({ error: 'Token and password are required' })
     if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' })
 
-    const user = await prisma.user.findFirst({
+    // Find users with non-expired tokens and verify hash
+    const users = await prisma.user.findMany({
       where: {
-        resetToken: token,
+        resetToken: { not: null },
         resetTokenExpiry: { gt: new Date() }
       }
     })
+
+    // Find the user whose hashed token matches
+    let user = null
+    for (const u of users) {
+      if (u.resetToken) {
+        const matches = await bcrypt.compare(token, u.resetToken)
+        if (matches) {
+          user = u
+          break
+        }
+      }
+    }
 
     if (!user) return res.status(400).json({ error: 'Invalid or expired reset link' })
 
