@@ -10,11 +10,29 @@ app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:5173',
   credentials: true,
 }))
+
 // Helmet — sets 15+ security headers automatically
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
-  contentSecurityPolicy: false, // Disabled — handled by Vercel on frontend
+  contentSecurityPolicy: false,
+  hsts: {
+    maxAge: 31536000, // 1 year
+    includeSubDomains: true,
+    preload: true,
+  }
 }))
+
+// Force HTTPS in production
+app.use((req, res, next) => {
+  if (
+    process.env.NODE_ENV === 'production' &&
+    req.headers['x-forwarded-proto'] !== 'https'
+  ) {
+    return res.redirect(301, `https://${req.headers.host}${req.url}`)
+  }
+  next()
+})
+
 // ⚠️ Stripe webhook MUST be before express.json()
 app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), require('./controllers/stripeController').handleWebhook)
 
@@ -68,7 +86,12 @@ app.use((req, res, next) => {
 })
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', message: 'Nooka API running' })
+  res.json({
+    status: 'ok',
+    message: 'Nooka API running',
+    environment: process.env.NODE_ENV || 'development',
+    timestamp: new Date().toISOString(),
+  })
 })
 
 const authRoutes = require('./routes/auth')
