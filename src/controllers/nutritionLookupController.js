@@ -10,15 +10,29 @@ const callClaude = async (anthropic, params, endpoint) => {
 
 // Normalize search key — removes duplicates from different spellings
 const normalizeKey = (mealName) => {
+  // Common words that don't change the food item identity
+  const stopWords = new Set([
+    'canada', 'canadian', 'the', 'a', 'an', 'and', 'with', 'without',
+    'style', 'classic', 'original', 'new', 'special', 'deluxe', 'extra',
+    'size', 'large', 'small', 'medium', 'regular', 'big', 'little',
+    'fresh', 'grilled', 'fried', 'baked', 'roasted', 'crispy', 'creamy',
+    'hot', 'cold', 'iced', 'warm', 'spicy', 'mild',
+    'combo', 'meal', 'sandwich', 'wrap', 'burger', 'bowl', 'plate',
+  ])
+
   return mealName
     .toLowerCase()
-    .replace(/[''`]/g, '')           // remove apostrophes
-    .replace(/[^a-z0-9\s]/g, ' ')   // remove punctuation
-    .replace(/\s+/g, ' ')            // collapse spaces
+    .replace(/[''`´]/g, '')              // remove all apostrophe variants
+    .replace(/®|™|©/g, '')              // remove trademark symbols
+    .replace(/\bno\.\s*\d+\b/g, '')     // remove "No. 1", "No. 2" etc
+    .replace(/\b\d+(oz|ml|g|kg|cal|kcal|lb|lbs)\b/g, '') // remove measurements
+    .replace(/[^a-z0-9\s]/g, ' ')       // remove remaining punctuation
+    .replace(/\s+/g, ' ')               // collapse spaces
     .trim()
     .split(' ')
-    .filter(w => w.length > 0)
-    .sort()                          // sort words so order doesn't matter
+    .filter(w => w.length > 1)          // drop single letters
+    .filter(w => !stopWords.has(w))     // drop stop words
+    .sort()                             // sort so word order doesn't matter
     .join(' ')
 }
 
