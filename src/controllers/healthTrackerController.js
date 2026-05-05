@@ -316,3 +316,41 @@ exports.deleteNutritionLog = async (req, res) => {
     res.status(500).json({ error: 'Failed to delete log' })
   }
 }
+
+// Search nutrition cache by meal name
+exports.searchNutritionCache = async (req, res) => {
+  try {
+    const { q } = req.query
+    if (!q || q.length < 2) return res.json({ results: [] })
+
+    const results = await prisma.nutritionCache.findMany({
+      where: {
+        mealName: {
+          contains: q,
+          mode: 'insensitive'
+        },
+        expiresAt: {
+          gt: new Date()
+        }
+      },
+      orderBy: { hitCount: 'desc' },
+      take: 6,
+      select: {
+        mealName: true,
+        calories: true,
+        protein: true,
+        carbs: true,
+        fat: true,
+        fiber: true,
+        servingSize: true,
+        source: true,
+        confidence: true,
+      }
+    })
+
+    res.json({ results })
+  } catch (err) {
+    console.error('Nutrition cache search error:', err)
+    res.json({ results: [] })
+  }
+}

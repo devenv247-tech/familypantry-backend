@@ -8,6 +8,7 @@ const {
   logMeal,
   updateMemberGoal,
   deleteNutritionLog,
+  searchNutritionCache,
 } = require('../controllers/healthTrackerController')
 const {
   lookupNutrition,
@@ -24,6 +25,7 @@ router.post('/meal', auth, logMeal)
 router.put('/goal', auth, updateMemberGoal)
 router.delete('/log/:id', auth, deleteNutritionLog)
 router.post('/lookup', auth, lookupNutrition)
+router.get('/nutrition/search', auth, searchNutritionCache)
 
 // Cache management — admin only
 router.get('/cache/stats', adminAuth, getCacheStats)
