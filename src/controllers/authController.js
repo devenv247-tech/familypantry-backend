@@ -216,3 +216,39 @@ exports.resetPassword = async (req, res) => {
     res.status(500).json({ error: 'Failed to reset password' })
   }
 }
+exports.logout = async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.json({ success: true })
+    }
+
+    const token = authHeader.split(' ')[1]
+    const decoded = jwt.verify(token, process.env.JWT_SECRET)
+
+    // Store token in denylist until it expires
+    await prisma.tokenDenylist.create({
+      data: {
+        token,
+        expiresAt: new Date(decoded.exp * 1000),
+      }
+    })
+
+    res.json({ success: true, message: 'Logged out successfully' })
+  } catch (err) {
+    // Even if token is invalid, logout succeeds
+    res.json({ success: true })
+  }
+}
+
+// Clean up expired tokens from denylist (run periodically)
+exports.cleanupDenylist = async () => {
+  try {
+    const result = await prisma.tokenDenylist.deleteMany({
+      where: { expiresAt: { lt: new Date() } }
+    })
+    console.log(`Cleaned up ${result.count} expired tokens from denylist`)
+  } catch (err) {
+    console.error('Denylist cleanup error:', err)
+  }
+}

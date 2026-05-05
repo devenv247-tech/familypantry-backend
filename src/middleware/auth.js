@@ -1,10 +1,10 @@
 const jwt = require('jsonwebtoken')
+const prisma = require('../utils/prisma')
 
-module.exports = (req, res, next) => {
+module.exports = async (req, res, next) => {
   try {
     let token = null
 
-    // Try Authorization header
     const authHeader = req.headers['authorization'] || req.headers['Authorization']
     if (authHeader && authHeader.startsWith('Bearer ')) {
       token = authHeader.substring(7)
@@ -21,6 +21,16 @@ module.exports = (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, secret)
+
+    // Check if token is in denylist (logged out)
+    const denied = await prisma.tokenDenylist.findUnique({
+      where: { token }
+    })
+
+    if (denied) {
+      return res.status(401).json({ error: 'Token has been invalidated. Please log in again.' })
+    }
+
     req.user = decoded
     next()
   } catch (err) {

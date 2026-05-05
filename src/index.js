@@ -120,3 +120,8 @@ const PORT = process.env.PORT || 3001
 app.listen(PORT, () => {
   console.log(`Nooka API running on port ${PORT}`)
 })
+
+// Clean up expired tokens from denylist every 24 hours
+const { cleanupDenylist } = require('./controllers/authController')
+setInterval(cleanupDenylist, 24 * 60 * 60 * 1000)
+cleanupDenylist() // Run on startup
