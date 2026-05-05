@@ -42,6 +42,8 @@ model User {
   resetToken       String?
   resetTokenExpiry DateTime?
   createdAt        DateTime  @default(now())
+  loginAttempts    Int       @default(0)
+  lockedUntil      DateTime?
 }
 
 model Member {

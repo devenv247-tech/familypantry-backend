@@ -54,19 +54,63 @@ exports.login = async (req, res) => {
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password required' })
     }
+
     const user = await prisma.user.findUnique({
       where: { email },
       include: { family: true }
     })
+
     if (!user) {
+      // Don't reveal if email exists
       return res.status(401).json({ error: 'Invalid email or password' })
     }
+
+    // Check if account is locked
+    if (user.lockedUntil && user.lockedUntil > new Date()) {
+      const minutesLeft = Math.ceil((user.lockedUntil - new Date()) / 60000)
+      return res.status(423).json({
+        error: `Account temporarily locked due to too many failed attempts. Try again in ${minutesLeft} minute${minutesLeft > 1 ? 's' : ''}.`
+      })
+    }
+
     const valid = await bcrypt.compare(password, user.password)
+
     if (!valid) {
-      return res.status(401).json({ error: 'Invalid email or password' })
+      // Increment failed attempts
+      const attempts = (user.loginAttempts || 0) + 1
+      const MAX_ATTEMPTS = 5
+
+      if (attempts >= MAX_ATTEMPTS) {
+        // Lock account for 15 minutes
+        const lockedUntil = new Date(Date.now() + 15 * 60 * 1000)
+        await prisma.user.update({
+          where: { email },
+          data: { loginAttempts: attempts, lockedUntil }
+        })
+        return res.status(423).json({
+          error: 'Too many failed attempts. Account locked for 15 minutes.'
+        })
+      }
+
+      await prisma.user.update({
+        where: { email },
+        data: { loginAttempts: attempts }
+      })
+
+      const remaining = MAX_ATTEMPTS - attempts
+      return res.status(401).json({
+        error: `Invalid email or password. ${remaining} attempt${remaining > 1 ? 's' : ''} remaining before lockout.`
+      })
     }
+
+    // Successful login — reset attempts and lock
+    await prisma.user.update({
+      where: { email },
+      data: { loginAttempts: 0, lockedUntil: null }
+    })
+
     const token = generateToken({ userId: user.id, familyId: user.familyId, email })
-   res.json({
+    res.json({
       token,
       user: { id: user.id, name: user.name, email: user.email },
       family: { id: user.family.id, name: user.family.name, plan: user.family.plan },
