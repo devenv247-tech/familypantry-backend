@@ -23,7 +23,7 @@ app.use((req, res, next) => {
 })
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', message: 'FamilyPantry API running' })
+  res.json({ status: 'ok', message: 'Nooka API running' })
 })
 
 const authRoutes = require('./routes/auth')
@@ -78,5 +78,5 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 3001
 app.listen(PORT, () => {
-  console.log(`FamilyPantry API running on port ${PORT}`)
+  console.log(`Nooka API running on port ${PORT}`)
 })
