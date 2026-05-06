@@ -11,13 +11,18 @@ const app = express()
 app.use(cors({
   origin: function(origin, callback) {
     const allowed = [
-      process.env.FRONTEND_URL,
+      'https://nooka.ca',
+      'https://www.nooka.ca',
+      'https://familypantry.vercel.app',
       'http://localhost:5173',
       'http://localhost:3000',
+      process.env.FRONTEND_URL,
     ].filter(Boolean)
+
     if (!origin || allowed.includes(origin)) {
       callback(null, true)
     } else {
+      console.error('CORS blocked:', origin)
       callback(new Error('Not allowed by CORS'))
     }
   },
