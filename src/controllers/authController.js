@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
-
+const { sendWelcome, sendPasswordReset } = require('../utils/email')
 
 const generateToken = (payload) => {
   return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '30d' })
@@ -36,6 +36,7 @@ exports.register = async (req, res) => {
         role: 'Admin',
       }
     })
+    sendWelcome(email, name).catch(err => console.error('Welcome email failed:', err))
     const token = generateToken({ userId: user.id, familyId: family.id, email })
     res.status(201).json({
       token,
@@ -204,10 +205,10 @@ exports.forgotPassword = async (req, res) => {
       data: { resetToken: hashedToken, resetTokenExpiry }
     })
 
-    // In production this token is emailed to the user via SendGrid
-    // Only log in development
     if (process.env.NODE_ENV !== 'production') {
       console.log(`[DEV] Reset token for ${email}: ${resetToken}`)
+    } else {
+      await sendPasswordReset(email, resetToken)
     }
 
     res.json({ success: true, message: 'If that email exists, a reset link has been sent', devToken: process.env.NODE_ENV === 'production' ? undefined : resetToken })
