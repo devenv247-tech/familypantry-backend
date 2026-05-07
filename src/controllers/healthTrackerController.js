@@ -196,9 +196,9 @@ exports.getHealthData = async (req, res) => {
     })
 
     res.json({ members: memberProfiles })
-  } catch (err) {
+ } catch (err) {
     console.error('getHealthData error:', err)
-    res.status(500).json({ error: 'Failed to get health data' })
+    res.status(500).json({ error: 'Failed to get health data', detail: err.message, code: err.code })
   }
 }
 
