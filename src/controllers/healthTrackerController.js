@@ -159,6 +159,7 @@ exports.getHealthData = async (req, res) => {
 
       // Latest weight
       const latestWeight = member.weightLogs[0]?.weight || member.weight
+      const latestWeightUnit = member.weightLogs[0]?.unit || 'kg'
 
       // Weight progress
       const weightHistory = member.weightLogs.map(w => ({
@@ -173,6 +174,7 @@ exports.getHealthData = async (req, res) => {
         name: member.name,
         age: member.age,
         currentWeight: latestWeight,
+        weightUnit: latestWeightUnit,
         goalWeight: member.goalWeight,
         height: member.height,
         goals: member.goals,
