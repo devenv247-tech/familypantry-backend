@@ -104,7 +104,12 @@ app.use((req, res, next) => {
   res.set('Expires', '0')
   next()
 })
-
+app.get('/api/debug-env', (req, res) => {
+  res.json({ 
+    frontendUrl: process.env.FRONTEND_URL,
+    nodeEnv: process.env.NODE_ENV 
+  })
+})
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
