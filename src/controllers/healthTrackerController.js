@@ -116,7 +116,7 @@ exports.getHealthData = async (req, res) => {
 
       // Get logs for this member
       const memberLogs = nutritionLogs.filter(l =>
-        l.memberName.toLowerCase() === member.name.toLowerCase()
+        l.memberName && member.name && l.memberName.toLowerCase() === member.name.toLowerCase()
       )
 
       // Today's totals
