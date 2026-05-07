@@ -1,6 +1,8 @@
-require('dotenv').config({
-  path: `.env.${process.env.NODE_ENV || 'development'}`
-})
+if (process.env.NODE_ENV !== 'production') {
+  require('dotenv').config({
+    path: `.env.${process.env.NODE_ENV || 'development'}`
+  })
+}
 const express = require('express')
 const cors = require('cors')
 const rateLimit = require('express-rate-limit')
