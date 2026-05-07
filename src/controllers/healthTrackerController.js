@@ -52,7 +52,7 @@ const calculateDailyCalories = (member) => {
 
 // Get macro targets based on goal
 const getMacroTargets = (calories, goal = '') => {
-  const g = goal.toLowerCase()
+  const g = (goal || '').toLowerCase()
   if (g.includes('gain muscle') || g.includes('high protein')) {
     return {
       protein: Math.round((calories * 0.35) / 4), // 35% protein
