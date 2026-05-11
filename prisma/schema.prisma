@@ -39,6 +39,7 @@ model User {
   isAdmin          Boolean   @default(false)
   familyId         String
   family           Family    @relation(fields: [familyId], references: [id])
+  memberProfile    Member?
   resetToken       String?
   resetTokenExpiry DateTime?
   createdAt        DateTime  @default(now())
@@ -59,6 +60,12 @@ model Member {
   allergens        String?
   dailyCalorieGoal Int?
   goalWeight       Float?
+  email            String?
+  inviteToken      String?
+  inviteExpiry     DateTime?
+  inviteAccepted   Boolean        @default(false)
+  userId           String?        @unique
+  linkedUser       User?          @relation(fields: [userId], references: [id])
   familyId         String
   family           Family         @relation(fields: [familyId], references: [id])
   nutritionLogs    NutritionLog[]

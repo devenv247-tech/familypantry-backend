@@ -70,4 +70,25 @@ async function sendExpiryAlert(toEmail, firstName, items) {
   });
 }
 
-module.exports = { sendWelcome, sendPasswordReset, sendExpiryAlert };
+async function sendFamilyInvite(toEmail, memberName, familyName, inviteToken) {
+  const link = `https://nooka.ca/accept-invite?token=${inviteToken}`;
+  await resend.emails.send({
+    from: FROM,
+    to: toEmail,
+    subject: `You've been invited to join ${familyName} on Nooka`,
+    html: `
+      <h2>Hi ${memberName}, you're invited! 🫧</h2>
+      <p><strong>${familyName}</strong> has added you to their family on Nooka — a smart meal planning and grocery app for Canadian families.</p>
+      <p>Click below to set your password and start using the app.</p>
+      <a href="${link}"
+         style="background:#1D9E75;color:#fff;padding:10px 20px;
+                border-radius:8px;text-decoration:none;display:inline-block;margin-top:12px">
+        Accept invite & set password
+      </a>
+      <p style="font-size:12px;color:#888;margin-top:16px">
+        This link expires in 7 days. If you didn't expect this, you can safely ignore it.
+      </p>`
+  });
+}
+
+module.exports = { sendWelcome, sendPasswordReset, sendExpiryAlert, sendFamilyInvite };

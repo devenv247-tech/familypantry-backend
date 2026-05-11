@@ -1,4 +1,6 @@
 const prisma = require('../utils/prisma')
+const crypto = require('crypto')
+const { sendFamilyInvite } = require('../utils/email')
 
 exports.getMembers = async (req, res) => {
   try {
@@ -81,5 +83,39 @@ exports.deleteMember = async (req, res) => {
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Failed to delete member' })
+  }
+}
+
+exports.inviteMember = async (req, res) => {
+  try {
+    const { id } = req.params
+    const { email } = req.body
+    const familyId = req.user.familyId
+
+    if (!email) return res.status(400).json({ error: 'Email is required' })
+
+    const member = await prisma.member.findFirst({ where: { id, familyId } })
+    if (!member) return res.status(404).json({ error: 'Member not found' })
+
+    if (member.inviteAccepted) return res.status(400).json({ error: 'This member already has a login' })
+
+    const existing = await prisma.user.findUnique({ where: { email } })
+    if (existing) return res.status(400).json({ error: 'That email already has a Nooka account' })
+
+    const token = crypto.randomBytes(32).toString('hex')
+    const expiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+
+    await prisma.member.update({
+      where: { id },
+      data: { email, inviteToken: token, inviteExpiry: expiry, inviteAccepted: false }
+    })
+
+    const family = await prisma.family.findUnique({ where: { id: familyId } })
+    await sendFamilyInvite(email, member.name, family.name, token)
+
+    res.json({ success: true, message: 'Invite sent' })
+  } catch (err) {
+    console.error('inviteMember error:', err)
+    res.status(500).json({ error: 'Failed to send invite' })
   }
 }
