@@ -1,9 +1,7 @@
-const { PrismaClient } = require('@prisma/client')
+const prisma = require('../utils/prisma')
 const Anthropic = require('@anthropic-ai/sdk')
 
-const prisma = new PrismaClient()
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-
 const getRDA = (age) => {
   if (age <= 3)  return { calcium: 700,  iron: 7,   vitaminD: 600 }
   if (age <= 8)  return { calcium: 1000, iron: 10,  vitaminD: 600 }
