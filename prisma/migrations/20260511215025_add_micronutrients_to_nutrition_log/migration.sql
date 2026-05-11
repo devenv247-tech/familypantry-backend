@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "NutritionLog" ADD COLUMN     "calcium" DOUBLE PRECISION,
+ADD COLUMN     "iron" DOUBLE PRECISION,
+ADD COLUMN     "vitaminD" DOUBLE PRECISION;

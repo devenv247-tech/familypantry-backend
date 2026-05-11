@@ -155,6 +155,9 @@ model NutritionLog {
   fiber      Float?
   sugar      Float?
   sodium     Float?
+  calcium    Float?
+  iron       Float?
+  vitaminD   Float?
   loggedAt   DateTime @default(now())
   familyId   String
   family     Family   @relation(fields: [familyId], references: [id])

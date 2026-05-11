@@ -67,6 +67,9 @@ exports.lookupNutrition = async (req, res) => {
         fiber: Math.round((cached.fiber || 0) * servings),
         sugar: Math.round((cached.sugar || 0) * servings),
         sodium: Math.round((cached.sodium || 0) * servings),
+        calcium: cached.calcium ? Math.round(cached.calcium * servings * 10) / 10 : null,
+        iron: cached.iron ? Math.round(cached.iron * servings * 10) / 10 : null,
+        vitaminD: cached.vitaminD ? Math.round(cached.vitaminD * servings) : null,
         confidence: cached.confidence,
         source: cached.source,
         fromCache: true,
@@ -101,9 +104,14 @@ Respond ONLY with valid JSON, no markdown:
   "fiber": 2,
   "sugar": 8,
   "sodium": 890,
+  "calcium": 120,
+  "iron": 3.2,
+  "vitaminD": 80,
   "confidence": "high/medium/low",
   "source": "McDonald's Canada official / estimated"
-}`
+}
+
+calcium is in mg, iron is in mg, vitaminD is in IU. Estimate based on ingredients if not officially known.`
       }]
     }, 'nutrition_lookup')
 
@@ -128,6 +136,9 @@ Respond ONLY with valid JSON, no markdown:
           fiber: nutrition.fiber,
           sugar: nutrition.sugar,
           sodium: nutrition.sodium,
+          calcium: nutrition.calcium || null,
+          iron: nutrition.iron || null,
+          vitaminD: nutrition.vitaminD || null,
           servingSize: nutrition.servingSize,
           source: nutrition.source,
           confidence: nutrition.confidence,
@@ -143,6 +154,9 @@ Respond ONLY with valid JSON, no markdown:
           fiber: nutrition.fiber,
           sugar: nutrition.sugar,
           sodium: nutrition.sodium,
+          calcium: nutrition.calcium || null,
+          iron: nutrition.iron || null,
+          vitaminD: nutrition.vitaminD || null,
           servingSize: nutrition.servingSize,
           source: nutrition.source,
           confidence: nutrition.confidence,

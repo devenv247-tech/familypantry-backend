@@ -246,7 +246,7 @@ exports.logWeight = async (req, res) => {
 // Log a manual meal
 exports.logMeal = async (req, res) => {
   try {
-    const { memberName, recipeName, mealType, calories, protein, carbs, fat, fiber } = req.body
+    const { memberName, recipeName, mealType, calories, protein, carbs, fat, fiber, calcium, iron, vitaminD } = req.body
     const familyId = req.user.familyId
 
     if (!memberName || !recipeName) {
@@ -263,6 +263,9 @@ exports.logMeal = async (req, res) => {
         carbs: carbs ? parseFloat(carbs) : null,
         fat: fat ? parseFloat(fat) : null,
         fiber: fiber ? parseFloat(fiber) : null,
+        calcium: calcium ? parseFloat(calcium) : null,
+        iron: iron ? parseFloat(iron) : null,
+        vitaminD: vitaminD ? parseFloat(vitaminD) : null,
         familyId,
       }
     })
