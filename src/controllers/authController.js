@@ -299,3 +299,52 @@ exports.cleanupDenylist = async () => {
     console.error('Denylist cleanup error:', err)
   }
 }
+
+exports.acceptInvite = async (req, res) => {
+  try {
+    const { token, password } = req.body
+
+    if (!token || !password) return res.status(400).json({ error: 'Token and password are required' })
+    if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' })
+
+    const member = await prisma.member.findFirst({
+      where: { inviteToken: token, inviteAccepted: false },
+      include: { family: true }
+    })
+
+    if (!member) return res.status(400).json({ error: 'Invalid or expired invite link' })
+    if (new Date() > member.inviteExpiry) return res.status(400).json({ error: 'This invite link has expired' })
+
+    const hashed = await bcrypt.hash(password, 10)
+
+    const user = await prisma.user.create({
+      data: {
+        name: member.name,
+        email: member.email,
+        password: hashed,
+        role: 'member',
+        familyId: member.familyId,
+      }
+    })
+
+    await prisma.member.update({
+      where: { id: member.id },
+      data: { inviteToken: null, inviteExpiry: null, inviteAccepted: true, userId: user.id }
+    })
+
+    const jwtToken = jwt.sign(
+      { userId: user.id, familyId: user.familyId },
+      process.env.JWT_SECRET,
+      { expiresIn: '30d' }
+    )
+
+    res.json({
+      token: jwtToken,
+      user: { id: user.id, name: user.name, email: user.email, role: user.role },
+      family: member.family
+    })
+  } catch (err) {
+    console.error('acceptInvite error:', err)
+    res.status(500).json({ error: 'Failed to accept invite' })
+  }
+}
