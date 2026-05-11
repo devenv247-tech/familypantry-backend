@@ -178,7 +178,15 @@ exports.getSubscription = async (req, res) => {
       }
     })
   } catch (err) {
-    console.error('getSubscription error:', err)
-    res.json({ plan: 'free', subscription: null })
+  console.error('getSubscription error:', err)
+  // Subscription no longer exists in Stripe — clear it from DB so UI recovers
+  if (err.code === 'resource_missing') {
+    await prisma.family.update({
+      where: { id: req.user.familyId },
+      data: { stripeSubscriptionId: null },
+    })
+    return res.json({ plan: 'free', status: 'none', subscription: null })
   }
+  res.status(500).json({ error: 'Failed to fetch subscription' })
+}
 }
