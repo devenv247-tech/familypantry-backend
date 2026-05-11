@@ -17,6 +17,7 @@ const {
   clearExpiredCache,
   clearAllCache,
 } = require('../controllers/nutritionLookupController')
+const { getKidsSummary } = require('../controllers/kidsNutritionController')
 
 // Health tracker routes
 router.get('/', auth, getHealthData)
@@ -26,6 +27,9 @@ router.put('/goal', auth, updateMemberGoal)
 router.delete('/log/:id', auth, deleteNutritionLog)
 router.post('/lookup', auth, lookupNutrition)
 router.get('/nutrition/search', auth, searchNutritionCache)
+
+// Kids nutrition mode
+router.get('/kids-summary/:memberId', auth, getKidsSummary)
 
 // Cache management — admin only
 router.get('/cache/stats', adminAuth, getCacheStats)
