@@ -146,7 +146,7 @@ Voice input: "${transcript}"
 Extract:
 - name: the item name (include brand if mentioned)
 - quantity: numeric amount (default 1)
-- unit: one of: pcs, kg, g, mg, L, ml, lb, oz, cup, tbsp, tsp, gallon (pick best fit, default "pcs")
+- unit: one of: pcs, dozen, kg, g, mg, L, ml, lb, oz, cup, tbsp, tsp, gallon (pick best fit, default "pcs")
 ${isGrocery ? '' : '- category: one of: Fridge, Freezer, Dry goods, Spices, Snacks (pick best fit, default "Fridge")'}
 - icon: a single relevant emoji
 
