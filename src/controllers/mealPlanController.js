@@ -356,3 +356,22 @@ Respond ONLY with valid JSON array, no markdown, no extra text:
     return handleAnthropicError(err, res)
   }
 }
+
+exports.markCooked = async (req, res) => {
+  try {
+    const { id } = req.params
+    const existing = await prisma.mealPlan.findFirst({
+      where: { id, familyId: req.user.familyId }
+    })
+    if (!existing) return res.status(404).json({ error: 'Meal not found' })
+
+    const meal = await prisma.mealPlan.update({
+      where: { id },
+      data: { cooked: true, cookedAt: new Date() }
+    })
+    res.json(meal)
+  } catch (err) {
+    console.error('markCooked error:', err)
+    res.status(500).json({ error: 'Failed to mark meal as cooked' })
+  }
+}

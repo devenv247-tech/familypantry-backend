@@ -105,15 +105,17 @@ model GroceryItem {
 }
 
 model MealPlan {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   weekStart  String
   day        String
   mealType   String
   recipeName String
   recipeData Json
+  cooked     Boolean   @default(false)
+  cookedAt   DateTime?
   familyId   String
-  family     Family   @relation(fields: [familyId], references: [id])
-  createdAt  DateTime @default(now())
+  family     Family    @relation(fields: [familyId], references: [id])
+  createdAt  DateTime  @default(now())
 }
 
 model ItemUsageHistory {
