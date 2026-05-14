@@ -7,6 +7,7 @@ const { getSeasonalContext } = require('../utils/seasons')
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 })
+const { estimateRecipeCost } = require('../utils/recipeCost')
 
 const getWeekKey = () => {
   const now = new Date()
@@ -386,5 +387,51 @@ Respond ONLY with valid JSON, no markdown:
     res.json(result)
   } catch (err) {
     return handleAnthropicError(err, res)
+  }
+}
+
+exports.estimateCosts = async (req, res) => {
+  try {
+    const { recipes } = req.body
+    const familyId = req.user.familyId
+
+    if (!recipes || !Array.isArray(recipes)) {
+      return res.status(400).json({ error: 'recipes array required' })
+    }
+
+    const family = await prisma.family.findUnique({ where: { id: familyId } })
+    if (family.plan === 'free') {
+      return res.status(403).json({ error: 'Budget mode is available on Family plan and above.' })
+    }
+
+    // Get price history from both PriceHistory and GroceryItem
+    const [priceHistory, groceryHistory] = await Promise.all([
+      prisma.priceHistory.findMany({ where: { familyId } }),
+      prisma.groceryItem.findMany({
+        where: { familyId, price: { not: null }, purchased: true }
+      })
+    ])
+
+    // Merge into unified price lookup
+    const combinedHistory = [
+      ...priceHistory.map(h => ({ itemName: h.itemName, price: h.price })),
+      ...groceryHistory
+        .filter(g => g.price)
+        .map(g => ({
+          itemName: g.name,
+          price: parseFloat(g.price.replace('$', '').replace(',', '') || 0)
+        }))
+        .filter(g => g.price > 0)
+    ]
+
+    const costs = recipes.map(recipe => ({
+      name: recipe.name,
+      cost: estimateRecipeCost(recipe, combinedHistory)
+    }))
+
+    res.json({ costs })
+  } catch (err) {
+    console.error('estimateCosts error:', err)
+    res.status(500).json({ error: 'Failed to estimate costs' })
   }
 }
