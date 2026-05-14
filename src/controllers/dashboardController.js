@@ -1,5 +1,5 @@
 const prisma = require('../utils/prisma')
-const { getCO2Score } = require('../utils/co2')
+// CO2 calculations use fixed averages per meal — no item-level lookup needed
 
 exports.getStats = async (req, res) => {
   try {
@@ -132,54 +132,51 @@ exports.getWasteSavings = async (req, res) => {
     const now = new Date()
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
 
-    // Meals cooked this month from meal plan
-    const cookedMeals = await prisma.mealPlan.findMany({
-      where: {
-        familyId,
-        cooked: true,
-        cookedAt: { gte: thirtyDaysAgo }
-      }
-    })
+    // Meals cooked this month — from MealPlan (cooked via meal plan)
+    // and CookedMeal (cooked via recipe suggestions)
+    const [cookedFromPlan, cookedFromRecipes] = await Promise.all([
+      prisma.mealPlan.findMany({
+        where: { familyId, cooked: true, cookedAt: { gte: thirtyDaysAgo } }
+      }),
+      prisma.cookedMeal.findMany({
+        where: { familyId, cookedAt: { gte: thirtyDaysAgo } }
+      })
+    ])
 
-    // Pantry items used (quantity went down) — approximate by items deleted/updated this month
+    const totalMealsCooked = cookedFromPlan.length + cookedFromRecipes.length
+
+    // Food rescued — pantry items removed before expiry
+    // ItemUsageHistory tracks items removed; if removedAt < actualExpiry = rescued
     const usageHistory = await prisma.itemUsageHistory.findMany({
       where: {
         familyId,
-        usedAt: { gte: thirtyDaysAgo },
-        action: 'cooked'
+        removedAt: { gte: thirtyDaysAgo, not: null },
+        actualExpiry: { not: null }
       }
     })
 
-    // Items that were expiring soon but got used (rescued food)
-    const rescuedItems = await prisma.itemUsageHistory.findMany({
-      where: {
-        familyId,
-        usedAt: { gte: thirtyDaysAgo },
-        action: 'cooked',
-        daysBeforeExpiry: { lte: 5, gte: 0 }
-      }
+    const rescuedItems = usageHistory.filter(item => {
+      if (!item.removedAt || !item.actualExpiry) return false
+      const daysBeforeExpiry = Math.round(
+        (new Date(item.actualExpiry) - new Date(item.removedAt)) / (1000 * 60 * 60 * 24)
+      )
+      return daysBeforeExpiry >= 0 && daysBeforeExpiry <= 5
     })
 
-    // Estimate money saved: avg Canadian meal costs ~$8 at home vs ~$18 eating out
-    // Each cooked meal = ~$10 saved vs eating out
-    const moneySaved = cookedMeals.length * 10
-
-    // CO2 saved from cooked meals vs eating out (restaurant supply chain ~3x higher)
-    // Each home meal saves ~1.2kg CO2 on average
-    const co2Saved = parseFloat((cookedMeals.length * 1.2).toFixed(1))
-
-    // Food waste value: EPA estimates $2,913/family/year = ~$8/day
-    // Each rescued item ≈ $3 avg value
     const foodRescued = rescuedItems.length
-    const foodRescuedValue = foodRescued * 3
-
-    // Total food waste avoided this month
+    const foodRescuedValue = foodRescued * 3 // avg $3 per rescued item
     const wasteAvoided = parseFloat((foodRescued * 0.3).toFixed(1)) // avg 300g per item
 
+    // Money saved: each home-cooked meal saves ~$10 vs eating out (Canadian avg)
+    const moneySaved = (totalMealsCooked * 10) + foodRescuedValue
+
+    // CO2 saved: each home meal saves ~1.2kg vs restaurant supply chain
+    const co2Saved = parseFloat((totalMealsCooked * 1.2).toFixed(1))
+
     res.json({
-      moneySaved: moneySaved + foodRescuedValue,
+      moneySaved,
       co2Saved,
-      mealsCooked: cookedMeals.length,
+      mealsCooked: totalMealsCooked,
       foodRescued,
       wasteAvoided,
       period: 'this month',
