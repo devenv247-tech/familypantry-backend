@@ -1,6 +1,24 @@
 const Anthropic = require('@anthropic-ai/sdk')
 const prisma = require('../utils/prisma')
 const { handleAnthropicError, trackApiUsage } = require('../utils/anthropicError')
+const rateLimit = require('express-rate-limit')
+
+// Max 10 scan attempts per user per 10 minutes
+// Blocks hammering while allowing normal usage (family plan = 5/month anyway)
+exports.scanRateLimit = rateLimit({
+  windowMs: 10 * 60 * 1000, // 10 minutes
+  max: 10,
+  keyGenerator: (req) => req.user?.familyId || req.ip, // per family, not per IP
+  handler: (req, res) => {
+    res.status(429).json({
+      error: 'Too many scan attempts',
+      message: 'You\'ve made too many scan requests. Please wait 10 minutes before trying again.',
+      retryAfter: 10,
+    })
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+})
 
 const callClaude = async (anthropic, params, endpoint) => {
   const message = await anthropic.messages.create(params)
@@ -60,6 +78,36 @@ exports.scanPantryPhoto = async (req, res) => {
 
     // Call Claude Vision
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+    // Pre-check: is this image food/pantry related? (cheap Haiku call)
+    const preCheck = await callClaude(anthropic, {
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 10,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'image',
+              source: { type: 'base64', media_type: mimeType || 'image/jpeg', data: imageBase64 }
+            },
+            {
+              type: 'text',
+              text: 'Does this image contain food, drinks, groceries, or pantry/fridge/kitchen items? Reply with only YES or NO.'
+            }
+          ]
+        }
+      ]
+    }, 'pantry_photo_scan')
+
+    const preCheckAnswer = preCheck.content[0].text.trim().toUpperCase()
+    if (!preCheckAnswer.startsWith('YES')) {
+      return res.status(400).json({
+        error: 'No food items detected',
+        message: 'This photo doesn\'t appear to contain food or pantry items. Please take a photo of your fridge, pantry, or groceries.',
+        notFood: true,
+      })
+    }
 
     const message = await callClaude(anthropic, {
       model: 'claude-sonnet-4-20250514',

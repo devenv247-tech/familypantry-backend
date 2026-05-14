@@ -2,6 +2,7 @@ const express = require('express')
 const router = express.Router()
 const auth = require('../middleware/auth')
 const { getItems, addItem, updateItem, deleteItem, subtractIngredients, restockItem, parseVoiceItem } = require('../controllers/pantryController')
+const { scanPantryPhoto, getScanStatus, scanRateLimit } = require('../controllers/pantryScanController')
 const { validatePantryItem } = require('../middleware/validate')
 
 router.get('/', auth, getItems)
