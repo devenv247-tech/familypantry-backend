@@ -96,3 +96,66 @@ exports.clearChecked = async (req, res) => {
     res.status(500).json({ error: 'Failed to clear checked items' })
   }
 }
+
+exports.getPredictions = async (req, res) => {
+  try {
+    const familyId = req.user.familyId
+
+    const history = await prisma.groceryItem.findMany({
+      where: { familyId, purchased: true, purchasedAt: { not: null } },
+      orderBy: { purchasedAt: 'asc' },
+    })
+
+    const grouped = {}
+    history.forEach(item => {
+      const key = item.name.toLowerCase().trim()
+      if (!grouped[key]) grouped[key] = { name: item.name, dates: [] }
+      grouped[key].dates.push(new Date(item.purchasedAt))
+    })
+
+    const [currentGrocery, pantryItems] = await Promise.all([
+      prisma.groceryItem.findMany({ where: { familyId, checked: false } }),
+      prisma.pantryItem.findMany({ where: { familyId } }),
+    ])
+
+    const onGroceryList = new Set(currentGrocery.map(i => i.name.toLowerCase().trim()))
+    const inPantry = new Set(pantryItems.map(i => i.name.toLowerCase().trim()))
+
+    const predictions = []
+    const now = new Date()
+
+    Object.values(grouped).forEach(({ name, dates }) => {
+      if (dates.length < 2) return
+
+      let totalDays = 0
+      for (let i = 1; i < dates.length; i++) {
+        totalDays += (dates[i] - dates[i - 1]) / (1000 * 60 * 60 * 24)
+      }
+      const avgIntervalDays = Math.round(totalDays / (dates.length - 1))
+      if (avgIntervalDays <= 0) return
+
+      const lastPurchase = dates[dates.length - 1]
+      const nextPurchaseDate = new Date(lastPurchase.getTime() + avgIntervalDays * 24 * 60 * 60 * 1000)
+      const daysUntilDue = Math.round((nextPurchaseDate - now) / (1000 * 60 * 60 * 24))
+
+      const key = name.toLowerCase().trim()
+      if (daysUntilDue <= 3 && !onGroceryList.has(key) && !inPantry.has(key)) {
+        predictions.push({
+          name,
+          avgIntervalDays,
+          lastPurchased: lastPurchase,
+          nextDue: nextPurchaseDate,
+          daysUntilDue,
+          overdue: daysUntilDue < 0,
+          purchaseCount: dates.length,
+        })
+      }
+    })
+
+    predictions.sort((a, b) => a.daysUntilDue - b.daysUntilDue)
+    res.json({ predictions: predictions.slice(0, 8) })
+  } catch (err) {
+    console.error('getPredictions error:', err)
+    res.status(500).json({ error: 'Failed to get predictions' })
+  }
+}
