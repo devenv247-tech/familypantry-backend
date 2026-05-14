@@ -24,7 +24,7 @@ const callClaude = async (anthropic, params, endpoint) => {
 
 exports.suggestRecipes = async (req, res) => {
   try {
-    const { members, mealType, cuisine } = req.body
+    const { members, mealType, cuisine, expiringItems } = req.body
     if (!members || members.length === 0) {
       return res.status(400).json({ error: 'Please select at least one member' })
     }
@@ -77,6 +77,10 @@ exports.suggestRecipes = async (req, res) => {
     }).join('; ')
 const mealPatternContext = await getMealPatternContext(req.user.familyId)
 const seasonal = getSeasonalContext()
+const expiringContext = expiringItems && expiringItems.length > 0
+  ? `\nURGENT - USE EXPIRING ITEMS: The following pantry items are expiring very soon and MUST be used in at least one recipe. Prioritise recipes that use these: ${expiringItems.join(', ')}.\n`
+  : ''
+
 const prompt = `You are a helpful family meal planning assistant.
 
 Number of people being cooked for: ${members.length}
@@ -84,7 +88,7 @@ Member health profiles: ${memberDetails || 'No specific health data'}
 Meal type: ${mealType}
 Cuisine preference: ${cuisine || 'Any cuisine'}
 Items currently in pantry: ${pantryList || 'Pantry is empty'}
-
+${expiringContext}
 ${cuisine && cuisine !== 'Any cuisine' 
   ? `IMPORTANT: Suggest recipes specifically from ${cuisine} cuisine.` 
   : 'Suggest recipes from any cuisine based on available ingredients.'}
