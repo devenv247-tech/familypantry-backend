@@ -186,3 +186,100 @@ exports.getWasteSavings = async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch waste savings' })
   }
 }
+
+exports.getNudges = async (req, res) => {
+  try {
+    const familyId = req.user.familyId
+    const now = new Date()
+    const nudges = []
+
+    // Expiry nudges handled separately by the expiring soon widget on dashboard
+
+    // 2. Meal variety — same protein cooked too often
+    const recentMeals = await prisma.cookedMeal.findMany({
+      where: { familyId, cookedAt: { gte: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) } },
+      orderBy: { cookedAt: 'desc' }
+    })
+
+    if (recentMeals.length >= 3) {
+      const keywords = ['chicken', 'beef', 'pork', 'fish', 'eggs', 'tofu', 'lamb']
+      keywords.forEach(keyword => {
+        const count = recentMeals.filter(m => m.recipeName.toLowerCase().includes(keyword)).length
+        if (count >= 3) {
+          nudges.push({
+            type: 'variety',
+            icon: '🔁',
+            message: `Your family has had ${keyword} ${count} times this week — time to mix it up?`,
+            action: { label: 'Get recipes', url: '/app/recipes' },
+            priority: 3,
+          })
+        }
+      })
+    }
+
+    // 3. Favourite meal not cooked in a while
+    const allMeals = await prisma.cookedMeal.findMany({
+      where: { familyId },
+      orderBy: { cookedAt: 'desc' },
+      take: 50
+    })
+
+    const mealCounts = {}
+    allMeals.forEach(m => {
+      mealCounts[m.recipeName] = (mealCounts[m.recipeName] || 0) + 1
+    })
+
+    const favourites = Object.entries(mealCounts)
+      .filter(([_, count]) => count >= 3)
+      .map(([name]) => name)
+
+    favourites.forEach(favName => {
+      const lastCooked = allMeals.find(m => m.recipeName === favName)
+      if (!lastCooked) return
+      const daysSince = Math.round((now - new Date(lastCooked.cookedAt)) / (1000 * 60 * 60 * 24))
+      if (daysSince >= 14) {
+        nudges.push({
+          type: 'favourite',
+          icon: '⭐',
+          message: `You haven't made ${favName} in ${daysSince} days — it's a family favourite!`,
+          action: { label: 'Get recipes', url: '/app/recipes' },
+          priority: 4,
+        })
+      }
+    })
+
+    // 4. Missing meal type in this week's plan
+    const weekStart = new Date(now)
+    const dayOfWeek = now.getDay()
+    const diff = now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1)
+    weekStart.setDate(diff)
+    weekStart.setHours(0, 0, 0, 0)
+    const weekStartStr = weekStart.toISOString().split('T')[0]
+
+    const weekMeals = await prisma.mealPlan.findMany({
+      where: { familyId, weekStart: weekStartStr }
+    })
+
+    const mealTypes = ['Breakfast', 'Lunch', 'Dinner']
+    mealTypes.forEach(type => {
+      const count = weekMeals.filter(m => m.mealType === type).length
+      if (count === 0) {
+        nudges.push({
+          type: 'planning',
+          icon: '📅',
+          message: `No ${type.toLowerCase()}s planned this week — want AI to suggest some?`,
+          action: { label: 'Plan meals', url: '/app/mealplan' },
+          priority: 5,
+        })
+      }
+    })
+
+    // Sort by priority and return top 3
+    nudges.sort((a, b) => a.priority - b.priority)
+
+    res.json({ nudges: nudges.slice(0, 3) })
+  } catch (err) {
+    console.error('getNudges error:', err)
+    res.status(500).json({ error: 'Failed to get nudges' })
+  }
+}
