@@ -90,9 +90,12 @@ Meal type: ${mealType}
 Cuisine preference: ${cuisine || 'Any cuisine'}
 Items currently in pantry: ${pantryList || 'Pantry is empty'}
 ${expiringContext}
-${cuisine && cuisine !== 'Any cuisine' 
-  ? `IMPORTANT: Suggest recipes specifically from ${cuisine} cuisine.` 
-  : 'Suggest recipes from any cuisine based on available ingredients.'}
+${cuisine && cuisine !== 'Any cuisine'
+  ? `DISH/CUISINE DIRECTION: The user wants "${cuisine}". Interpret this creatively:
+- If it's a cuisine (e.g. "Punjabi", "South Indian", "Bengali") → suggest authentic regional dishes, NOT the most famous export dish. Think home-cooked meals, regional staples, lesser-known dishes.
+- If it's a dish type (e.g. "Burger", "Wrap / Burrito", "Salad", "Rice Bowl") → make that the format, and use pantry ingredients + cuisine context to fill it (e.g. a spiced chicken rice bowl, a paneer wrap, a daal-stuffed burrito).
+- Avoid defaulting to the single most globally-known dish for any cuisine.`
+  : 'Suggest recipes from any cuisine based on available ingredients. Be diverse — do not default to the most famous dish from any one cuisine.'}
 ${mealPatternContext}
 SEASONAL GUIDANCE:
 ${seasonal.context}
@@ -108,6 +111,13 @@ ALLERGEN RULES - MUST FOLLOW:
 8. Peanuts allergen triggers on: peanuts, peanut butter, peanut oil
 9. Tree nuts allergen triggers on: almonds, cashews, walnuts, pecans, pistachios
 10. Even if a recipe has allergen conflicts, still suggest it but populate allergenWarnings fully
+VARIETY RULES - MUST FOLLOW:
+1. The 3 recipes MUST use different cooking methods (e.g. one grilled/roasted, one curry/braised, one stir-fried/pan-seared)
+2. Do NOT default to the most famous or obvious dish. If Indian cuisine, do NOT suggest Butter Chicken unless no other option exists
+3. Prioritize pantry items heavily — if rice, lentils, or grains are in the pantry, at least one recipe should use them as the base
+4. Vary the protein across recipes if multiple proteins are available in the pantry
+5. Think beyond restaurant classics — include home-style, regional, or lesser-known dishes
+
 Please suggest exactly 3 recipes. For each recipe provide:
 - Name
 - Description (1-2 sentences)
@@ -238,8 +248,8 @@ Cuisine preference: ${cuisine || 'Any cuisine'}
 Items in pantry: ${pantryList || 'Pantry is empty'}
 
 ${cuisine && cuisine !== 'Any cuisine'
-  ? `IMPORTANT: The recipe must be from ${cuisine} cuisine.`
-  : 'Choose the most suitable cuisine based on the family preferences and pantry items.'}
+  ? `DISH/CUISINE DIRECTION: The user wants "${cuisine}". If it's a cuisine, pick an authentic regional dish — not the most famous export. If it's a dish type (Burger, Wrap, Salad, etc.), use that as the format and adapt ingredients from the pantry and family preferences.`
+  : 'Choose the most suitable cuisine. Be creative — avoid defaulting to the single most famous dish from any cuisine.'}
 ${mealPatternContext}
 SEASONAL GUIDANCE:
 ${seasonal.context}
@@ -254,6 +264,8 @@ ALLERGEN RULES - MUST FOLLOW:
 7. Peanuts allergen triggers on: peanuts, peanut butter, peanut oil
 8. Tree nuts allergen triggers on: almonds, cashews, walnuts, pecans, pistachios
 9. Even if a recipe has allergen conflicts, still suggest it but populate allergenWarnings fully
+
+VARIETY RULE: Do NOT default to famous or overused dishes (e.g. Butter Chicken for Indian cuisine). Choose a recipe that creatively uses pantry staples like grains, legumes, or vegetables already available. Prefer regional home-style dishes over restaurant classics.
 
 Create ONE perfect recipe that balances the nutritional needs and dietary restrictions of ALL family members.
 Consider everyone's health goals and dietary preferences.
