@@ -18,6 +18,8 @@ model Family {
   createdAt            DateTime           @default(now())
   photoScanCount       Int                @default(0)
   photoScanMonth       String?
+  drinkCount           Int                @default(0)
+  drinkWeek            String?
   users                User[]
   members              Member[]
   pantryItems          PantryItem[]

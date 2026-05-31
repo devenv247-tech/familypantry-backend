@@ -332,6 +332,126 @@ Respond ONLY with a valid JSON object, no other text:
     return handleAnthropicError(err, res)
   }
 }
+exports.suggestDrinks = async (req, res) => {
+  try {
+    const { condition } = req.body
+
+    if (!condition) {
+      return res.status(400).json({ error: 'Please select a condition' })
+    }
+
+    const family = await prisma.family.findUnique({
+      where: { id: req.user.familyId }
+    })
+
+    // Free plan — no drinks
+    if (family.plan === 'free') {
+      return res.status(403).json({
+        error: 'Paid feature',
+        message: 'Drinks & remedies are available on the Family plan and above.',
+        limitReached: true,
+      })
+    }
+
+    // Family plan — 5 drinks/week separate from recipe count
+    const currentWeek = getWeekKey()
+    if (family.plan === 'family') {
+      if (family.drinkWeek === currentWeek && family.drinkCount >= 5) {
+        return res.status(403).json({
+          error: 'Weekly limit reached',
+          message: 'You have used all 5 drink suggestions this week. Upgrade to Premium for unlimited.',
+          limitReached: true,
+        })
+      }
+      if (family.drinkWeek !== currentWeek) {
+        await prisma.family.update({
+          where: { id: family.id },
+          data: { drinkCount: 0, drinkWeek: currentWeek }
+        })
+      }
+    }
+
+    // Premium plan — unlimited, no checks needed
+
+    const pantryItems = await prisma.pantryItem.findMany({
+      where: { familyId: req.user.familyId },
+    })
+
+    const pantryList = pantryItems.map(i => i.name).join(', ')
+    const seasonal = getSeasonalContext()
+
+    const prompt = `You are a knowledgeable home wellness and drinks expert with deep knowledge of traditional beverages, home remedies, and seasonal drinks from cultures around the world.
+
+Current season in Canada: ${seasonal.season} (${seasonal.month})
+User's condition/mood: ${condition}
+Items currently in pantry: ${pantryList || 'Pantry is empty'}
+
+YOUR GOAL: Suggest 3 drinks that genuinely help with "${condition}".
+
+CRITICAL VARIETY RULES - MUST FOLLOW:
+1. Each drink MUST come from a DIFFERENT cultural tradition (e.g. South Asian, Middle Eastern, Latin American, East Asian, West African, Caribbean, European, Indigenous/Canadian, etc.)
+2. Do NOT default to the most globally famous drink for any culture. Think regional, home-style, lesser-known traditions
+3. At least ONE drink must be fully makeable from pantry items already available
+4. At least ONE drink may require 1-2 simple affordable ingredients to buy — this is fine and adds value
+5. Match the season: prefer warm/hot drinks in winter and fall, cooling drinks in summer and spring
+6. Let the pantry DRIVE the cultural direction — if ginger and tulsi are present lean South Asian; if tamarind is there use it; if mint and lemon are there go Mediterranean or Middle Eastern; if nothing obvious, pick freely and creatively across cultures
+7. NEVER suggest generic drinks like "lemon water" or "green tea" without a specific cultural twist or preparation method
+
+WELLNESS RULE: Every drink must have a genuine specific reason why it helps with "${condition}". Be precise — name the active compound or mechanism (e.g. "ginger contains gingerols which reduce gut inflammation" not just "good for digestion").
+
+Respond ONLY with a valid JSON array, no other text:
+[
+  {
+    "name": "Full drink name (Local name in brackets if it exists, e.g. Fennel Seed Water (Saunf Pani))",
+    "culture": "Specific cultural origin e.g. South Indian, Persian, Mexican, West African, Caribbean",
+    "why": "1-2 sentences explaining specifically why this helps with ${condition} — name the mechanism",
+    "temp": "hot or cold or either",
+    "prepTime": "e.g. 5 mins",
+    "icon": "single relevant emoji",
+    "fullyFromPantry": true or false,
+    "ingredients": [
+      { "name": "ingredient name", "quantity": "amount", "unit": "unit", "inPantry": true or false }
+    ],
+    "steps": ["Step 1", "Step 2", "Step 3"],
+    "tip": "one short serving or customization tip"
+  }
+]`
+
+    const message = await callClaude(anthropic, {
+      model: 'claude-sonnet-4-5',
+      max_tokens: 2000,
+      messages: [{ role: 'user', content: prompt }],
+    }, 'suggest_drinks')
+
+    let text = message.content[0].text.trim()
+    text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+    const drinks = JSON.parse(text)
+
+    // Increment count for family plan
+    if (family.plan === 'family') {
+      await prisma.family.update({
+        where: { id: family.id },
+        data: {
+          drinkCount: { increment: 1 },
+          drinkWeek: currentWeek,
+        }
+      })
+    }
+
+    res.json({
+      drinks,
+      usage: family.plan === 'family' ? {
+        used: (family.drinkWeek === currentWeek ? family.drinkCount : 0) + 1,
+        limit: 5,
+        plan: 'family'
+      } : { plan: family.plan }
+    })
+
+  } catch (err) {
+    return handleAnthropicError(err, res)
+  }
+}
+
 exports.getSubstitutions = async (req, res) => {
   try {
     const { ingredientName, ingredientUnit, recipeContext } = req.body
