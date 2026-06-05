@@ -30,6 +30,7 @@ model Family {
   nutritionLogs        NutritionLog[]
   priceHistory         PriceHistory[]
   savedRecipes         SavedRecipe[]
+  restockThresholdPercent Int @default(20)
 }
 
 model User {
@@ -89,6 +90,11 @@ model PantryItem {
   familyId         String
   family           Family    @relation(fields: [familyId], references: [id])
   createdAt        DateTime  @default(now())
+  normalizedQty    Float?
+  normalizedUnit   String?
+  maxQuantity      Float?
+  isSpice          Boolean  @default(false)
+  lastUsedAt       DateTime?
 }
 
 model GroceryItem {
