@@ -1,4 +1,5 @@
 const prisma = require('../utils/prisma')
+const { getStockPercent } = require('../utils/normalizeUnit')
 
 exports.getItems = async (req, res) => {
   try {
@@ -100,12 +101,65 @@ exports.clearChecked = async (req, res) => {
 exports.getPredictions = async (req, res) => {
   try {
     const familyId = req.user.familyId
+    const now = new Date()
+    const sixtyDaysAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000)
 
-    const history = await prisma.groceryItem.findMany({
-      where: { familyId, purchased: true, purchasedAt: { not: null } },
-      orderBy: { purchasedAt: 'asc' },
-    })
+    // ─── Fetch all data in parallel ───────────────────────────────────────────
+    const [history, currentGrocery, pantryItems, family] = await Promise.all([
+      prisma.groceryItem.findMany({
+        where: { familyId, purchased: true, purchasedAt: { not: null } },
+        orderBy: { purchasedAt: 'asc' },
+      }),
+      prisma.groceryItem.findMany({ where: { familyId, checked: false } }),
+      prisma.pantryItem.findMany({ where: { familyId } }),
+      prisma.family.findUnique({ where: { id: familyId } }),
+    ])
 
+    const onGroceryList = new Set(currentGrocery.map(i => i.name.toLowerCase().trim()))
+    const restockThreshold = family?.restockThresholdPercent ?? 20
+    const urgentThreshold = restockThreshold * 0.1
+
+    const predictions = []
+    const addedNames = new Set()
+
+    // ─── Signal 1: Percentage-based low stock (works from day one) ────────────
+    for (const item of pantryItems) {
+      const key = item.name.toLowerCase().trim()
+
+      // Skip if already on grocery list
+      if (onGroceryList.has(key)) continue
+
+      // Skip if no maxQuantity set yet (old items with no baseline)
+      if (!item.maxQuantity || item.maxQuantity <= 0) continue
+
+      // Skip if not used in 60 days (seasonal suppression)
+      if (item.lastUsedAt && new Date(item.lastUsedAt) < sixtyDaysAgo) continue
+
+      const stockPct = getStockPercent(item.normalizedQty ?? item.quantity, item.maxQuantity)
+      if (stockPct === null) continue
+
+      // Use tighter threshold for spices
+      const effectiveThreshold = item.isSpice ? restockThreshold / 4 : restockThreshold
+
+      if (stockPct <= effectiveThreshold) {
+        const urgent = stockPct <= urgentThreshold || stockPct <= 0
+
+        predictions.push({
+          name: item.name,
+          source: 'low_stock',
+          stockPercent: stockPct,
+          urgent,
+          reason: stockPct <= 0
+            ? 'Out of stock'
+            : `${Math.round(stockPct)}% remaining`,
+          daysUntilDue: urgent ? -1 : 0, // used for sorting
+          overdue: urgent,
+        })
+        addedNames.add(key)
+      }
+    }
+
+    // ─── Signal 2: Purchase interval predictions ──────────────────────────────
     const grouped = {}
     history.forEach(item => {
       const key = item.name.toLowerCase().trim()
@@ -113,19 +167,13 @@ exports.getPredictions = async (req, res) => {
       grouped[key].dates.push(new Date(item.purchasedAt))
     })
 
-    const [currentGrocery, pantryItems] = await Promise.all([
-      prisma.groceryItem.findMany({ where: { familyId, checked: false } }),
-      prisma.pantryItem.findMany({ where: { familyId } }),
-    ])
-
-    const onGroceryList = new Set(currentGrocery.map(i => i.name.toLowerCase().trim()))
-    const inPantry = new Set(pantryItems.map(i => i.name.toLowerCase().trim()))
-
-    const predictions = []
-    const now = new Date()
-
     Object.values(grouped).forEach(({ name, dates }) => {
       if (dates.length < 2) return
+
+      const key = name.toLowerCase().trim()
+
+      // Skip if already on grocery list or already added via low-stock signal
+      if (onGroceryList.has(key) || addedNames.has(key)) return
 
       let totalDays = 0
       for (let i = 1; i < dates.length; i++) {
@@ -138,22 +186,39 @@ exports.getPredictions = async (req, res) => {
       const nextPurchaseDate = new Date(lastPurchase.getTime() + avgIntervalDays * 24 * 60 * 60 * 1000)
       const daysUntilDue = Math.round((nextPurchaseDate - now) / (1000 * 60 * 60 * 24))
 
-      const key = name.toLowerCase().trim()
-      if (daysUntilDue <= 3 && !onGroceryList.has(key) && !inPantry.has(key)) {
+      // Wider window for auto-generate (7 days), shown in UI at 3 days
+      if (daysUntilDue <= 7) {
         predictions.push({
           name,
+          source: 'interval',
           avgIntervalDays,
           lastPurchased: lastPurchase,
           nextDue: nextPurchaseDate,
           daysUntilDue,
           overdue: daysUntilDue < 0,
+          urgent: daysUntilDue < 0,
           purchaseCount: dates.length,
+          reason: daysUntilDue < 0
+            ? `Every ${avgIntervalDays}d — overdue by ${Math.abs(daysUntilDue)}d`
+            : daysUntilDue === 0
+            ? `Every ${avgIntervalDays}d — due today`
+            : `Every ${avgIntervalDays}d — due in ${daysUntilDue}d`,
         })
+        addedNames.add(key)
       }
     })
 
-    predictions.sort((a, b) => a.daysUntilDue - b.daysUntilDue)
-    res.json({ predictions: predictions.slice(0, 8) })
+    // ─── Sort: urgent first, then by stockPercent/daysUntilDue ───────────────
+    predictions.sort((a, b) => {
+      if (a.urgent && !b.urgent) return -1
+      if (!a.urgent && b.urgent) return 1
+      if (a.source === 'low_stock' && b.source === 'low_stock') {
+        return (a.stockPercent ?? 100) - (b.stockPercent ?? 100)
+      }
+      return (a.daysUntilDue ?? 0) - (b.daysUntilDue ?? 0)
+    })
+
+    res.json({ predictions: predictions.slice(0, 10) })
   } catch (err) {
     console.error('getPredictions error:', err)
     res.status(500).json({ error: 'Failed to get predictions' })
