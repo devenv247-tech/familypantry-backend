@@ -1,5 +1,6 @@
 const prisma = require('../utils/prisma')
 const Anthropic = require('@anthropic-ai/sdk')
+const { normalizeUnit, detectIsSpice, getStockPercent } = require('../utils/normalizeUnit')
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 exports.getItems = async (req, res) => {
@@ -21,15 +22,24 @@ exports.addItem = async (req, res) => {
     if (!name || !category) {
       return res.status(400).json({ error: 'Name and category are required' })
     }
+   const rawQty = parseFloat(quantity) || 0
+    const normalized = normalizeUnit(rawQty, unit)
+    const isSpice = detectIsSpice(name)
+
     const item = await prisma.pantryItem.create({
       data: {
         name,
-        quantity: parseFloat(quantity) || 0,
+        quantity: rawQty,
         unit: unit || 'pcs',
         category,
         expiry: expiry || null,
         icon: icon || '🛒',
         familyId: req.user.familyId,
+        normalizedQty: normalized?.normalizedQty ?? null,
+        normalizedUnit: normalized?.normalizedUnit ?? null,
+        maxQuantity: normalized?.normalizedQty ?? null,
+        isSpice,
+        lastUsedAt: null,
       }
     })
     res.status(201).json(item)
@@ -47,15 +57,37 @@ exports.updateItem = async (req, res) => {
     })
     if (!existing) return res.status(404).json({ error: 'Item not found' })
     const { name, quantity, unit, category, expiry, icon } = req.body
+    const rawQty = parseFloat(quantity) || 0
+    const normalized = normalizeUnit(rawQty, unit || existing.unit)
+    const isSpice = detectIsSpice(name || existing.name)
+
+    // Update maxQuantity if new normalized qty exceeds current max
+    let newMax = existing.maxQuantity
+    if (normalized?.normalizedQty != null) {
+      if (!newMax || normalized.normalizedQty > newMax) {
+        newMax = normalized.normalizedQty
+      }
+    }
+
+    // If quantity decreased, item was consumed — update lastUsedAt
+    const prevNormalized = normalizeUnit(existing.quantity, existing.unit)
+    const wasConsumed = prevNormalized && normalized &&
+      normalized.normalizedQty < prevNormalized.normalizedQty
+
     const item = await prisma.pantryItem.update({
       where: { id },
       data: {
         name,
-        quantity: parseFloat(quantity) || 0,
+        quantity: rawQty,
         unit: unit || 'pcs',
         category,
         expiry,
         icon,
+        normalizedQty: normalized?.normalizedQty ?? existing.normalizedQty,
+        normalizedUnit: normalized?.normalizedUnit ?? existing.normalizedUnit,
+        maxQuantity: newMax,
+        isSpice,
+        lastUsedAt: wasConsumed ? new Date() : existing.lastUsedAt,
       }
     })
     res.json(item)
@@ -92,10 +124,25 @@ exports.subtractIngredients = async (req, res) => {
         }
       })
       if (item) {
-        const newQty = Math.max(0, item.quantity - (parseFloat(ing.quantity) || 0))
+        const subtractAmt = parseFloat(ing.quantity) || 0
+        const newQty = Math.max(0, item.quantity - subtractAmt)
+        const normalized = normalizeUnit(newQty, item.unit)
+
+        // Update maxQuantity if somehow not set yet
+        const prevNormalized = normalizeUnit(item.quantity, item.unit)
+        let newMax = item.maxQuantity
+        if (!newMax && prevNormalized?.normalizedQty) {
+          newMax = prevNormalized.normalizedQty
+        }
+
         const updated = await prisma.pantryItem.update({
           where: { id: item.id },
-          data: { quantity: newQty }
+          data: {
+            quantity: newQty,
+            normalizedQty: normalized?.normalizedQty ?? item.normalizedQty,
+            maxQuantity: newMax,
+            lastUsedAt: new Date(),
+          }
         })
         results.push({ name: ing.name, updated: true, remaining: newQty, unit: updated.unit })
       } else {
@@ -119,10 +166,20 @@ exports.restockItem = async (req, res) => {
 
     if (!existing) return res.status(404).json({ error: 'Item not found' })
 
+    const newQty = existing.quantity + parseFloat(quantity)
+    const normalized = normalizeUnit(newQty, existing.unit)
+
+    let newMax = existing.maxQuantity
+    if (normalized?.normalizedQty != null && (!newMax || normalized.normalizedQty > newMax)) {
+      newMax = normalized.normalizedQty
+    }
+
     const updated = await prisma.pantryItem.update({
       where: { id },
       data: {
-        quantity: existing.quantity + parseFloat(quantity),
+        quantity: newQty,
+        normalizedQty: normalized?.normalizedQty ?? existing.normalizedQty,
+        maxQuantity: newMax,
       }
     })
 
