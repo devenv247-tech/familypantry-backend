@@ -2,6 +2,24 @@ const prisma = require('../utils/prisma')
 const crypto = require('crypto')
 const { sendFamilyInvite } = require('../utils/email')
 
+exports.updateRestockThreshold = async (req, res) => {
+  try {
+    const { restockThresholdPercent } = req.body
+    const val = parseInt(restockThresholdPercent)
+    if (isNaN(val) || val < 5 || val > 50) {
+      return res.status(400).json({ error: 'Threshold must be between 5 and 50' })
+    }
+    const family = await prisma.family.update({
+      where: { id: req.user.familyId },
+      data: { restockThresholdPercent: val },
+    })
+    res.json({ success: true, restockThresholdPercent: family.restockThresholdPercent })
+  } catch (err) {
+    console.error('updateRestockThreshold error:', err)
+    res.status(500).json({ error: 'Failed to update threshold' })
+  }
+}
+
 exports.getMembers = async (req, res) => {
   try {
     const members = await prisma.member.findMany({
