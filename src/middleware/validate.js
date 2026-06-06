@@ -75,11 +75,14 @@ const validateMember = [
     .notEmpty().withMessage('Name is required')
     .isLength({ max: 100 }).withMessage('Name too long'),
   body('age')
-    .optional({ nullable: true })
+    .optional({ nullable: true, checkFalsy: true })
     .isInt({ min: 0, max: 120 }).withMessage('Age must be between 0 and 120'),
   body('weight')
-    .optional({ nullable: true })
+    .optional({ nullable: true, checkFalsy: true })
     .isFloat({ min: 0, max: 500 }).withMessage('Weight must be between 0 and 500'),
+  body('height')
+    .optional({ nullable: true, checkFalsy: true })
+    .isLength({ max: 20 }).withMessage('Height too long'),
   body('goals')
     .optional()
     .isLength({ max: 500 }).withMessage('Goals too long'),
@@ -89,6 +92,12 @@ const validateMember = [
   body('allergens')
     .optional()
     .isLength({ max: 500 }).withMessage('Allergens too long'),
+  body('isBaby')
+    .optional()
+    .isBoolean().withMessage('isBaby must be a boolean'),
+  body('birthDate')
+    .optional({ nullable: true, checkFalsy: true })
+    .isISO8601().withMessage('Invalid birth date format'),
   validate
 ]
 

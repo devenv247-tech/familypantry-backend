@@ -74,9 +74,10 @@ model Member {
   familyId         String
   family           Family         @relation(fields: [familyId], references: [id])
   nutritionLogs    NutritionLog[]
-  weightLogs              WeightLog[]
+ weightLogs              WeightLog[]
   allergenIntroductions   AllergenIntroduction[]
   feedingLogs             FeedingLog[]
+  growthLogs              GrowthLog[]
   createdAt        DateTime       @default(now())
 }
 
@@ -285,4 +286,16 @@ model TokenDenylist {
   token     String   @unique
   expiresAt DateTime
   createdAt DateTime @default(now())
+}
+
+model GrowthLog {
+  id         String   @id @default(cuid())
+  memberId   String
+  member     Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  weight     Float
+  height     Float
+  weightUnit String   @default("kg")
+  heightUnit String   @default("cm")
+  note       String?
+  loggedAt   DateTime @default(now())
 }

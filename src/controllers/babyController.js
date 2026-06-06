@@ -1,5 +1,6 @@
 const prisma = require('../utils/prisma')
 const Anthropic = require('@anthropic-ai/sdk')
+const { assessGrowth, getNextMeasurementDue } = require('../utils/whoGrowth')
 
 // Helper: age in months from birthDate
 const getAgeMonths = (birthDate) => {
@@ -181,6 +182,94 @@ exports.deleteFeedingLog = async (req, res) => {
   } catch (err) {
     console.error('deleteFeedingLog error:', err)
     res.status(500).json({ error: 'Failed to delete feeding log entry' })
+  }
+}
+
+// POST /api/baby/:memberId/growth
+exports.logGrowth = async (req, res) => {
+  try {
+    const { memberId } = req.params
+    const { weight, height, weightUnit, heightUnit, note } = req.body
+
+    if (!weight || !height) {
+      return res.status(400).json({ error: 'Weight and height are required' })
+    }
+
+    const member = await prisma.member.findFirst({
+      where: { id: memberId, familyId: req.user.familyId, isBaby: true }
+    })
+    if (!member) return res.status(404).json({ error: 'Baby member not found' })
+
+    // Save to GrowthLog
+    const log = await prisma.growthLog.create({
+      data: {
+        memberId,
+        weight: parseFloat(weight),
+        height: parseFloat(height),
+        weightUnit: weightUnit || 'kg',
+        heightUnit: heightUnit || 'cm',
+        note: note || null,
+        loggedAt: new Date(),
+      }
+    })
+
+    // Also update the member's current weight/height
+    await prisma.member.update({
+      where: { id: memberId },
+      data: {
+        weight: parseFloat(weight),
+        weightUnit: weightUnit || 'kg',
+        height: `${height}cm`,
+      }
+    })
+
+    // Return log with WHO assessment
+    const months = getAgeMonths(member.birthDate)
+    const weightKg = weightUnit === 'lbs' ? parseFloat(weight) * 0.453592 : parseFloat(weight)
+    const heightCm = heightUnit === 'in' ? parseFloat(height) * 2.54 : parseFloat(height)
+    const assessment = assessGrowth(months, weightKg, heightCm, member.gender || null)
+    const nextDue = getNextMeasurementDue(months)
+
+    res.status(201).json({ log, assessment, nextDue })
+  } catch (err) {
+    console.error('logGrowth error:', err)
+    res.status(500).json({ error: 'Failed to log growth measurement' })
+  }
+}
+
+// GET /api/baby/:memberId/growth
+exports.getGrowthHistory = async (req, res) => {
+  try {
+    const { memberId } = req.params
+
+    const member = await prisma.member.findFirst({
+      where: { id: memberId, familyId: req.user.familyId, isBaby: true }
+    })
+    if (!member) return res.status(404).json({ error: 'Baby member not found' })
+
+    const logs = await prisma.growthLog.findMany({
+      where: { memberId },
+      orderBy: { loggedAt: 'asc' }
+    })
+
+    const months = getAgeMonths(member.birthDate)
+    const latest = logs[logs.length - 1]
+    let assessment = null
+    let nextDue = null
+
+    if (latest) {
+      const weightKg = latest.weightUnit === 'lbs'
+        ? latest.weight * 0.453592 : latest.weight
+      const heightCm = latest.heightUnit === 'in'
+        ? latest.height * 2.54 : latest.height
+      assessment = assessGrowth(months, weightKg, heightCm, member.gender || null)
+      nextDue = getNextMeasurementDue(months)
+    }
+
+    res.json({ logs, assessment, nextDue, ageMonths: months })
+  } catch (err) {
+    console.error('getGrowthHistory error:', err)
+    res.status(500).json({ error: 'Failed to fetch growth history' })
   }
 }
 

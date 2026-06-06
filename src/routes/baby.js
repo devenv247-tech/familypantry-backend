@@ -11,6 +11,8 @@ const {
   deleteFeedingLog,
   generateBabyRecipe,
   generatePediatricianReport,
+  logGrowth,
+  getGrowthHistory,
 } = require('../controllers/babyController')
 
 router.get('/:memberId/profile',                    auth, getBabyProfile)
@@ -22,5 +24,7 @@ router.post('/:memberId/feeding-log',               auth, addFeedingLog)
 router.delete('/:memberId/feeding-log/:logId',      auth, deleteFeedingLog)
 router.post('/:memberId/recipe',                    auth, generateBabyRecipe)
 router.get('/:memberId/report',                     auth, generatePediatricianReport)
+router.post('/:memberId/growth',                    auth, logGrowth)
+router.get('/:memberId/growth',                     auth, getGrowthHistory)
 
 module.exports = router
