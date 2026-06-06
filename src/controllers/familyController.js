@@ -35,7 +35,7 @@ exports.getMembers = async (req, res) => {
 
 exports.addMember = async (req, res) => {
   try {
-    const { name, age, weight, weightUnit, height, goals, dietary, allergens } = req.body
+    const { name, age, weight, weightUnit, height, goals, dietary, allergens, isBaby, birthDate } = req.body
     if (!name) return res.status(400).json({ error: 'Name is required' })
     const member = await prisma.member.create({
       data: {
@@ -47,6 +47,8 @@ exports.addMember = async (req, res) => {
         goals: goals || null,
         dietary: dietary || null,
         allergens: allergens || null,
+        isBaby: !!isBaby,
+        birthDate: birthDate ? new Date(birthDate) : null,
         role: 'Member',
         familyId: req.user.familyId,
       }
@@ -65,7 +67,7 @@ exports.updateMember = async (req, res) => {
       where: { id, familyId: req.user.familyId }
     })
     if (!existing) return res.status(404).json({ error: 'Member not found' })
-    const { name, age, weight, weightUnit, height, goals, dietary, allergens } = req.body
+    const { name, age, weight, weightUnit, height, goals, dietary, allergens, isBaby, birthDate } = req.body
     const member = await prisma.member.update({
       where: { id },
       data: {
@@ -77,6 +79,8 @@ exports.updateMember = async (req, res) => {
         goals: goals || null,
         dietary: dietary || null,
         allergens: allergens || null,
+        isBaby: isBaby !== undefined ? !!isBaby : existing.isBaby,
+        birthDate: birthDate ? new Date(birthDate) : (isBaby === false ? null : existing.birthDate),
       }
     })
     res.json(member)
