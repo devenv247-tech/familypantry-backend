@@ -141,7 +141,7 @@ const adminRoutes = require('./routes/admin')
 const publicRoutes = require('./routes/public')
 const pantryToolsRoutes = require('./routes/pantryTools')
 const healthTrackerRoutes = require('./routes/healthTracker')
-
+const babyRoutes = require('./routes/baby')
 
 app.use('/api/auth', authLimiter, authRoutes)
 app.use('/api/family', familyRoutes)
@@ -164,6 +164,7 @@ app.use('/api/admin', adminLimiter, adminRoutes)
 app.use('/api/app', publicRoutes)
 app.use('/api/pantry-tools', aiLimiter, pantryToolsRoutes)
 app.use('/api/health-tracker', healthTrackerRoutes)
+app.use('/api/baby', babyRoutes)
 
 app.use((err, req, res, next) => {
   // Only log full stack in development
