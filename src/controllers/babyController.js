@@ -289,3 +289,156 @@ Respond ONLY with a valid JSON object in this exact format:
     res.status(500).json({ error: 'Failed to generate baby recipe' })
   }
 }
+
+// GET /api/baby/:memberId/report
+exports.generatePediatricianReport = async (req, res) => {
+  try {
+    const { memberId } = req.params
+
+    // Plan gate — Premium only
+    const family = await prisma.family.findUnique({ where: { id: req.user.familyId } })
+    if (family.plan !== 'premium') {
+      return res.status(403).json({
+        error: 'Premium plan required',
+        message: 'Upgrade to Premium to export pediatrician reports.',
+      })
+    }
+
+    const member = await prisma.member.findFirst({
+      where: { id: memberId, familyId: req.user.familyId, isBaby: true },
+      include: {
+        allergenIntroductions: { orderBy: { introducedAt: 'asc' } },
+        feedingLogs: { orderBy: { loggedAt: 'desc' }, take: 50 },
+      }
+    })
+    if (!member) return res.status(404).json({ error: 'Baby member not found' })
+
+    const months = getAgeMonths(member.birthDate)
+    const stage = getStage(months)
+
+    const PDFDocument = require('pdfkit')
+    const doc = new PDFDocument({ margin: 50, size: 'A4' })
+
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', `attachment; filename="nooka-report-${member.name.toLowerCase().replace(/\s+/g, '-')}.pdf"`)
+    doc.pipe(res)
+
+    // ── Header ──────────────────────────────────────────────
+    doc.fontSize(20).font('Helvetica-Bold').text('Nooka — Pediatric Feeding Report', { align: 'center' })
+    doc.fontSize(10).font('Helvetica').fillColor('#666').text(`Generated ${new Date().toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' })}`, { align: 'center' })
+    doc.moveDown(1.5)
+
+    // ── Baby info ────────────────────────────────────────────
+    doc.fontSize(14).font('Helvetica-Bold').fillColor('#000').text('Baby Information')
+    doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke('#e5e7eb')
+    doc.moveDown(0.5)
+
+    const infoRows = [
+      ['Name', member.name],
+      ['Date of birth', member.birthDate ? new Date(member.birthDate).toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' }) : 'Not provided'],
+      ['Age', months !== null ? `${months} months` : 'Unknown'],
+      ['Current feeding stage', stage ? `Stage ${stage.stage} — ${stage.label}` : 'Unknown'],
+      ['Texture level', stage?.texture || 'Unknown'],
+      ['Report date', new Date().toLocaleDateString('en-CA')],
+    ]
+
+    infoRows.forEach(([label, value]) => {
+      doc.fontSize(10).font('Helvetica-Bold').fillColor('#374151').text(label + ':', { continued: true, width: 180 })
+      doc.font('Helvetica').fillColor('#000').text('  ' + value)
+    })
+
+    doc.moveDown(1.5)
+
+    // ── Allergen introductions ───────────────────────────────
+    doc.fontSize(14).font('Helvetica-Bold').fillColor('#000').text('Allergen Introduction History')
+    doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke('#e5e7eb')
+    doc.moveDown(0.5)
+
+    if (member.allergenIntroductions.length === 0) {
+      doc.fontSize(10).font('Helvetica').fillColor('#666').text('No allergen introductions recorded yet.')
+    } else {
+      // Table header
+      doc.fontSize(9).font('Helvetica-Bold').fillColor('#374151')
+      doc.text('Allergen', 50, doc.y, { width: 120 })
+      doc.text('Date Introduced', 170, doc.y - doc.currentLineHeight(), { width: 130 })
+      doc.text('Reaction', 300, doc.y - doc.currentLineHeight(), { width: 100 })
+      doc.text('Notes', 400, doc.y - doc.currentLineHeight(), { width: 145 })
+      doc.moveDown(0.3)
+      doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke('#e5e7eb')
+      doc.moveDown(0.3)
+
+      member.allergenIntroductions.forEach((intro, i) => {
+        const reactionLabel = intro.reaction === 'none' ? 'No reaction' : intro.reaction === 'mild' ? 'Mild reaction' : intro.reaction === 'severe' ? 'SEVERE' : intro.reaction || '—'
+        const reactionColor = intro.reaction === 'severe' ? '#dc2626' : intro.reaction === 'mild' ? '#d97706' : '#16a34a'
+        const y = doc.y
+        doc.fontSize(9).font('Helvetica').fillColor('#000').text(intro.allergen, 50, y, { width: 120 })
+        doc.text(new Date(intro.introducedAt).toLocaleDateString('en-CA'), 170, y, { width: 130 })
+        doc.fillColor(reactionColor).text(reactionLabel, 300, y, { width: 100 })
+        doc.fillColor('#666').text(intro.notes || '—', 400, y, { width: 145 })
+        doc.moveDown(0.5)
+        if (i < member.allergenIntroductions.length - 1) {
+          doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke('#f3f4f6')
+        }
+      })
+    }
+
+    doc.moveDown(1.5)
+
+    // ── Feeding log ──────────────────────────────────────────
+    doc.fontSize(14).font('Helvetica-Bold').fillColor('#000').text('Recent Feeding Log (last 50 entries)')
+    doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke('#e5e7eb')
+    doc.moveDown(0.5)
+
+    if (member.feedingLogs.length === 0) {
+      doc.fontSize(10).font('Helvetica').fillColor('#666').text('No feeding entries recorded yet.')
+    } else {
+      // Table header
+      doc.fontSize(9).font('Helvetica-Bold').fillColor('#374151')
+      doc.text('Date', 50, doc.y, { width: 100 })
+      doc.text('Food', 150, doc.y - doc.currentLineHeight(), { width: 130 })
+      doc.text('Texture', 280, doc.y - doc.currentLineHeight(), { width: 90 })
+      doc.text('Reaction', 370, doc.y - doc.currentLineHeight(), { width: 90 })
+      doc.text('Notes', 460, doc.y - doc.currentLineHeight(), { width: 85 })
+      doc.moveDown(0.3)
+      doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke('#e5e7eb')
+      doc.moveDown(0.3)
+
+      member.feedingLogs.forEach((log, i) => {
+        // Page break if needed
+        if (doc.y > 720) {
+          doc.addPage()
+          doc.moveDown(1)
+        }
+        const reactionLabel = log.reaction === 'none' ? 'No reaction' : log.reaction === 'mild' ? 'Mild' : log.reaction === 'severe' ? 'SEVERE' : log.reaction || '—'
+        const reactionColor = log.reaction === 'severe' ? '#dc2626' : log.reaction === 'mild' ? '#d97706' : '#16a34a'
+        const y = doc.y
+        doc.fontSize(9).font('Helvetica').fillColor('#000')
+        doc.text(new Date(log.loggedAt).toLocaleDateString('en-CA'), 50, y, { width: 100 })
+        doc.text(log.foodName, 150, y, { width: 130 })
+        doc.fillColor('#666').text(log.texture || '—', 280, y, { width: 90 })
+        doc.fillColor(reactionColor).text(reactionLabel, 370, y, { width: 90 })
+        doc.fillColor('#666').text(log.notes || '—', 460, y, { width: 85 })
+        doc.moveDown(0.5)
+        if (i < member.feedingLogs.length - 1) {
+          doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke('#f3f4f6')
+        }
+      })
+    }
+
+    doc.moveDown(2)
+
+    // ── Footer ───────────────────────────────────────────────
+    doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke('#e5e7eb')
+    doc.moveDown(0.5)
+    doc.fontSize(8).font('Helvetica').fillColor('#9ca3af')
+      .text('Generated by Nooka — AI-powered meal planning for Canadian families — nooka.ca', { align: 'center' })
+    doc.text('This report is for informational purposes only. Always consult your pediatrician or public health nurse for medical advice.', { align: 'center' })
+
+    doc.end()
+  } catch (err) {
+    console.error('generatePediatricianReport error:', err)
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to generate report' })
+    }
+  }
+}
