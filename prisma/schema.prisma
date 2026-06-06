@@ -63,6 +63,8 @@ model Member {
   allergens        String?
   dailyCalorieGoal Int?
   goalWeight       Float?
+  isBaby           Boolean  @default(false)
+  birthDate        DateTime?
   email            String?
   inviteToken      String?
   inviteExpiry     DateTime?
@@ -72,7 +74,9 @@ model Member {
   familyId         String
   family           Family         @relation(fields: [familyId], references: [id])
   nutritionLogs    NutritionLog[]
-  weightLogs       WeightLog[]
+  weightLogs              WeightLog[]
+  allergenIntroductions   AllergenIntroduction[]
+  feedingLogs             FeedingLog[]
   createdAt        DateTime       @default(now())
 }
 
@@ -250,6 +254,31 @@ model NutritionCache {
   hitCount    Int      @default(1)
   createdAt   DateTime @default(now())
   expiresAt   DateTime
+}
+model AllergenIntroduction {
+  id           String   @id @default(cuid())
+  memberId     String
+  member       Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  allergen     String
+  introducedAt DateTime
+  reaction     String?
+  notes        String?
+  createdAt    DateTime @default(now())
+
+  @@unique([memberId, allergen])
+}
+
+model FeedingLog {
+  id        String   @id @default(cuid())
+  memberId  String
+  member    Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  foodName  String
+  portionMl Int?
+  portionG  Int?
+  texture   String?
+  reaction  String?
+  notes     String?
+  loggedAt  DateTime @default(now())
 }
 model TokenDenylist {
   id        String   @id @default(cuid())
