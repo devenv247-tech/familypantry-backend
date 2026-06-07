@@ -31,6 +31,19 @@ module.exports = async (req, res, next) => {
       return res.status(401).json({ error: 'Token has been invalidated. Please log in again.' })
     }
 
+    // Check if password was changed after token was issued
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      select: { passwordChangedAt: true }
+    })
+
+    if (user?.passwordChangedAt) {
+      const tokenIssuedAt = new Date(decoded.iat * 1000)
+      if (user.passwordChangedAt > tokenIssuedAt) {
+        return res.status(401).json({ error: 'Password was changed. Please log in again.' })
+      }
+    }
+
     req.user = decoded
     next()
   } catch (err) {

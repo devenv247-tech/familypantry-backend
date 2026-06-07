@@ -50,6 +50,7 @@ model User {
   lockedUntil          DateTime?
   consentedAt          DateTime?
   privacyPolicyVersion String?
+  passwordChangedAt    DateTime?
 }
 
 model Member {

@@ -170,6 +170,7 @@ exports.updateAccount = async (req, res) => {
         return res.status(400).json({ error: 'Password must be at least 6 characters' })
       }
       updateData.password = await bcrypt.hash(password, 12)
+      updateData.passwordChangedAt = new Date()
     }
 
     const user = await prisma.user.update({
