@@ -125,10 +125,25 @@ exports.deleteAccount = async (req, res) => {
   try {
     const { userId, familyId } = req.user
 
-    // Delete everything related to this family in order
+    // Delete all family-scoped data first (child records before parents)
+    await prisma.allergenIntroduction.deleteMany({ where: { member: { familyId } } })
+    await prisma.feedingLog.deleteMany({ where: { member: { familyId } } })
+    await prisma.growthLog.deleteMany({ where: { member: { familyId } } })
+    await prisma.weightLog.deleteMany({ where: { member: { familyId } } })
+    await prisma.nutritionLog.deleteMany({ where: { familyId } })
+    
+    await prisma.itemUsageHistory.deleteMany({ where: { familyId } })
+    await prisma.cookedMeal.deleteMany({ where: { familyId } })
+    await prisma.mealPlan.deleteMany({ where: { familyId } })
+    await prisma.priceHistory.deleteMany({ where: { familyId } })
+    await prisma.savedRecipe.deleteMany({ where: { familyId } })
     await prisma.groceryItem.deleteMany({ where: { familyId } })
     await prisma.pantryItem.deleteMany({ where: { familyId } })
     await prisma.member.deleteMany({ where: { familyId } })
+
+   // No token cleanup needed — tokens expire naturally and denylist is keyed by token string not userId
+
+    // Delete users then family
     await prisma.user.deleteMany({ where: { familyId } })
     await prisma.family.delete({ where: { id: familyId } })
 
