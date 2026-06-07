@@ -113,7 +113,7 @@ exports.login = async (req, res) => {
     const token = generateToken({ userId: user.id, familyId: user.familyId, email })
     res.json({
       token,
-      user: { id: user.id, name: user.name, email: user.email },
+      user: { id: user.id, name: user.name, email: user.email, isAdmin: user.isAdmin ?? false },
       family: { id: user.family.id, name: user.family.name, plan: user.family.plan },
     })
   } catch (err) {
