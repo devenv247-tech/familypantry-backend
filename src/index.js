@@ -96,8 +96,19 @@ const adminLimiter = rateLimit({
 })
 
 app.use(globalLimiter)
-app.use(express.json({ limit: '10mb' }))
-app.use(express.urlencoded({ limit: '10mb', extended: true }))
+// Routes that legitimately need large bodies
+const LARGE_BODY_ROUTES = [
+  '/api/pantry/scan',         // base64 image upload
+  '/api/recipes/suggest',     // member profiles + pantry list
+  '/api/recipes/family',      // member profiles + pantry list
+  '/api/mealplan/generate-week', // full week plan generation
+]
+
+app.use((req, res, next) => {
+  const needsLargeBody = LARGE_BODY_ROUTES.some(route => req.path.startsWith(route))
+  express.json({ limit: needsLargeBody ? '10mb' : '100kb' })(req, res, next)
+})
+app.use(express.urlencoded({ limit: '100kb', extended: true }))
 
 app.use((req, res, next) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private')
