@@ -482,7 +482,7 @@ const predictExpiry = async (req, res) => {
     // 3. Only call Claude if nothing else worked
     if (!days) {
       const claudeResult = await askClaude(itemName, category)
-      days = claudeResult.days
+      days = Math.min(claudeResult.days, 1825) // cap at 5 years max
       confidence = claudeResult.confidence
       source = 'ai_predicted'
       reasoning = claudeResult.reasoning

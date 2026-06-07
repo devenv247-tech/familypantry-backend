@@ -14,5 +14,6 @@ router.delete('/account', auth, deleteAccount)
 router.post('/logout', auth, logout)
 router.post('/accept-invite', acceptInvite)
 router.get('/confirm-email', confirmEmailChange)
+router.get('/export', auth, exportUserData)
 
 module.exports = router
