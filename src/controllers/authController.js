@@ -27,6 +27,8 @@ exports.register = async (req, res) => {
         password: hashedPassword,
         role: 'admin',
         familyId: family.id,
+        consentedAt: new Date(),
+        privacyPolicyVersion: '2026-05-05',
       }
     })
     const member = await prisma.member.create({
