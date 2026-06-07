@@ -3,7 +3,7 @@ const jwt = require('jsonwebtoken')
 const { sendWelcome, sendPasswordReset } = require('../utils/email')
 
 const generateToken = (payload) => {
-  return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '30d' })
+  return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '7d' })
 }
 const prisma = require('../utils/prisma')
 exports.register = async (req, res) => {
