@@ -1,7 +1,7 @@
 const express = require('express')
 const router = express.Router()
 const auth = require('../middleware/auth')
-const { register, login, deleteAccount, forgotPassword, resetPassword, updateAccount, logout, acceptInvite } = require('../controllers/authController')
+const { register, login, deleteAccount, forgotPassword, resetPassword, updateAccount, logout, acceptInvite, confirmEmailChange } = require('../controllers/authController')
 const { validateRegister, validateLogin, validateForgotPassword, validateResetPassword } = require('../middleware/validate')
 
 router.post('/register', register)
@@ -12,5 +12,6 @@ router.put('/account', auth, updateAccount)
 router.delete('/account', auth, deleteAccount)
 router.post('/logout', auth, logout)
 router.post('/accept-invite', acceptInvite)
+router.get('/confirm-email', confirmEmailChange)
 
 module.exports = router

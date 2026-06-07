@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
-const { sendWelcome, sendPasswordReset } = require('../utils/email')
+const { sendWelcome, sendPasswordReset, sendEmailChangeVerification } = require('../utils/email')
 
 const generateToken = (payload) => {
   return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '7d' })
@@ -164,7 +164,36 @@ exports.updateAccount = async (req, res) => {
     // Update user
     const updateData = {}
     if (name) updateData.name = name
-    if (email) updateData.email = email
+
+    // Email change requires verification — don't update directly
+    if (email && email !== req.body.currentEmail) {
+      const existing = await prisma.user.findUnique({ where: { email } })
+      if (existing) return res.status(400).json({ error: 'Email already in use' })
+
+      const emailToken = crypto.randomBytes(32).toString('hex')
+      const emailTokenExpiry = new Date(Date.now() + 3600000) // 1 hour
+
+      await prisma.user.update({
+        where: { id: userId },
+        data: {
+          pendingEmail: email,
+          emailChangeToken: emailToken,
+          emailChangeExpiry: emailTokenExpiry,
+        }
+      })
+
+      sendEmailChangeVerification(email, emailToken).catch(err =>
+        console.error('Email change verification failed:', err)
+      )
+
+      // Return early with a message — don't commit the email yet
+      return res.json({
+        success: true,
+        emailVerificationSent: true,
+        message: `A confirmation link has been sent to ${email}. Your email will update once confirmed.`
+      })
+    }
+
     if (password) {
       if (password.length < 6) {
         return res.status(400).json({ error: 'Password must be at least 6 characters' })
@@ -307,6 +336,38 @@ exports.logout = async (req, res) => {
 }
 
 // Clean up expired tokens from denylist (run periodically)
+exports.confirmEmailChange = async (req, res) => {
+  try {
+    const { token } = req.query
+    if (!token) return res.status(400).json({ error: 'Token is required' })
+
+    const user = await prisma.user.findFirst({
+      where: {
+        emailChangeToken: token,
+        emailChangeExpiry: { gt: new Date() }
+      }
+    })
+
+    if (!user) return res.status(400).json({ error: 'Invalid or expired confirmation link' })
+    if (!user.pendingEmail) return res.status(400).json({ error: 'No pending email change found' })
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        email: user.pendingEmail,
+        pendingEmail: null,
+        emailChangeToken: null,
+        emailChangeExpiry: null,
+      }
+    })
+
+    res.json({ success: true, message: 'Email updated successfully. Please log in again.' })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Failed to confirm email change' })
+  }
+}
+
 exports.cleanupDenylist = async () => {
   try {
     const result = await prisma.tokenDenylist.deleteMany({

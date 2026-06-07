@@ -91,4 +91,24 @@ async function sendFamilyInvite(toEmail, memberName, familyName, inviteToken) {
   });
 }
 
-module.exports = { sendWelcome, sendPasswordReset, sendExpiryAlert, sendFamilyInvite };
+async function sendEmailChangeVerification(toEmail, token) {
+  const link = `https://nooka.ca/confirm-email?token=${token}`
+  await resend.emails.send({
+    from: FROM,
+    to: toEmail,
+    subject: 'Confirm your new email address — Nooka',
+    html: `
+      <h2>Confirm your new email</h2>
+      <p>Click below to confirm this email address for your Nooka account. This link expires in 1 hour.</p>
+      <a href="${link}"
+         style="background:#1D9E75;color:#fff;padding:10px 20px;
+                border-radius:8px;text-decoration:none;display:inline-block;margin-top:12px">
+        Confirm email address
+      </a>
+      <p style="font-size:12px;color:#888;margin-top:16px">
+        If you didn't request this, ignore this email — your current address will remain unchanged.
+      </p>`
+  })
+}
+
+module.exports = { sendWelcome, sendPasswordReset, sendExpiryAlert, sendFamilyInvite, sendEmailChangeVerification };
