@@ -414,7 +414,7 @@ exports.acceptInvite = async (req, res) => {
     const jwtToken = jwt.sign(
       { userId: user.id, familyId: user.familyId },
       process.env.JWT_SECRET,
-      { expiresIn: '30d' }
+      { expiresIn: '7d' }
     )
 
     res.json({
