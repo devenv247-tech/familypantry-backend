@@ -2,6 +2,7 @@ const express = require('express')
 const router = express.Router()
 const auth = require('../middleware/auth')
 const { register, login, deleteAccount, forgotPassword, resetPassword, updateAccount, logout, acceptInvite, confirmEmailChange } = require('../controllers/authController')
+const { exportUserData } = require('../controllers/exportController')
 const { validateRegister, validateLogin, validateForgotPassword, validateResetPassword } = require('../middleware/validate')
 
 router.post('/register', register)
