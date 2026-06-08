@@ -82,7 +82,7 @@ exports.exportUserData = async (req, res) => {
       prisma.weightLog.findMany({
         where: { member: { familyId } },
         select: {
-          weight: true, unit: true, recordedAt: true,
+          weight: true, note: true, loggedAt: true,
         }
       }),
       prisma.cookedMeal.findMany({
