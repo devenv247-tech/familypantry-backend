@@ -68,15 +68,15 @@ exports.exportUserData = async (req, res) => {
       prisma.savedRecipe.findMany({
         where: { familyId },
         select: {
-          title: true, mealType: true, cuisine: true, createdAt: true,
+          name: true, description: true, tags: true, difficulty: true,
+          time: true, serves: true, allergenWarnings: true,
         }
       }),
       prisma.nutritionLog.findMany({
         where: { familyId },
         select: {
-          memberName: true, mealName: true, mealType: true,
-          calories: true, protein: true, carbs: true,
-          fat: true, loggedAt: true,
+          recipeName: true, calories: true, protein: true,
+          carbs: true, fat: true, fiber: true, sugar: true, sodium: true,
         }
       }),
       prisma.weightLog.findMany({
@@ -102,7 +102,7 @@ exports.exportUserData = async (req, res) => {
         where: { member: { familyId } },
         select: {
           weight: true, weightUnit: true, height: true,
-          heightUnit: true, notes: true, loggedAt: true,
+          heightUnit: true, note: true,
         }
       }),
       prisma.allergenIntroduction.findMany({
