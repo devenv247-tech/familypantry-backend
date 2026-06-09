@@ -23,6 +23,40 @@ const callClaude = async (anthropic, params, endpoint) => {
   return message
 }
 
+// ─── Fuzzy pantry name matcher ────────────────────────────────────────────────
+const nameMatchesPantry = (missingName, pantryItems) => {
+  const norm = s => s.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim()
+  const mNorm = norm(missingName)
+  return pantryItems.some(p => {
+    const pNorm = norm(p.name)
+    return (
+      pNorm === mNorm ||
+      pNorm.includes(mNorm) ||
+      mNorm.includes(pNorm) ||
+      // handle common synonyms e.g. "scallion" vs "green onion"
+      (mNorm.includes('onion') && pNorm.includes('onion')) ||
+      (mNorm.includes('chicken') && pNorm.includes('chicken')) ||
+      (mNorm.includes('tomato') && pNorm.includes('tomato')) ||
+      (mNorm.includes('oil') && pNorm.includes('oil')) ||
+      (mNorm.includes('flour') && pNorm.includes('flour')) ||
+      (mNorm.includes('rice') && pNorm.includes('rice')) ||
+      (mNorm.includes('milk') && pNorm.includes('milk')) ||
+      (mNorm.includes('cheese') && pNorm.includes('cheese')) ||
+      (mNorm.includes('pepper') && pNorm.includes('pepper')) ||
+      (mNorm.includes('garlic') && pNorm.includes('garlic')) ||
+      (mNorm.includes('ginger') && pNorm.includes('ginger')) ||
+      (mNorm.includes('butter') && pNorm.includes('butter')) ||
+      (mNorm.includes('cream') && pNorm.includes('cream')) ||
+      (mNorm.includes('yogurt') && pNorm.includes('yogurt')) ||
+      (mNorm.includes('lentil') && pNorm.includes('lentil')) ||
+      (mNorm.includes('bean') && pNorm.includes('bean')) ||
+      (mNorm.includes('pasta') && pNorm.includes('pasta')) ||
+      (mNorm.includes('bread') && pNorm.includes('bread')) ||
+      (mNorm.includes('egg') && pNorm.includes('egg'))
+    )
+  })
+}
+
 exports.suggestRecipes = async (req, res) => {
   try {
     const { members, mealType, cuisine, expiringItems } = req.body
@@ -54,10 +88,55 @@ exports.suggestRecipes = async (req, res) => {
       }
     }
 
-    // Get pantry items
-    const pantryItems = await prisma.pantryItem.findMany({
+    // ── 1. Get pantry — exclude expired and zero/negative quantity ────────────
+    const today = new Date()
+    const rawPantry = await prisma.pantryItem.findMany({
       where: { familyId: req.user.familyId },
     })
+    const pantryItems = rawPantry.filter(i => {
+      if (i.quantity <= 0) return false
+      if (i.expiry && new Date(i.expiry) < today) return false
+      return true
+    })
+
+    // ── 2. Get items currently on grocery list (user knows they need more) ────
+    const groceryItems = await prisma.groceryItem.findMany({
+      where: { familyId: req.user.familyId, checked: false },
+      select: { name: true },
+    })
+    const groceryNames = new Set(groceryItems.map(g => g.name.toLowerCase().trim()))
+
+    // ── 3. Build pantry list — flag low stock, exclude grocery list items ─────
+    const pantryList = pantryItems
+      .filter(i => !groceryNames.has(i.name.toLowerCase().trim()))
+      .map(i => {
+        const lowStock = i.maxQuantity && i.quantity / i.maxQuantity < 0.2
+        return `${i.name} (${i.quantity} ${i.unit}${lowStock ? ' — LOW STOCK' : ''})`
+      })
+      .join(', ')
+
+    // ── 4. Get recent recipe history for variety ──────────────────────────────
+    const recentMeals = await prisma.cookedMeal.findMany({
+      where: { familyId: req.user.familyId },
+      orderBy: { cookedAt: 'desc' },
+      take: 30,
+      select: { recipeName: true, cookedAt: true },
+    })
+    const recentNames = recentMeals
+      .filter(m => new Date() - new Date(m.cookedAt) <= 14 * 24 * 60 * 60 * 1000)
+      .map(m => m.recipeName)
+
+    // Also grab saved recipes to avoid repeating those too
+    const savedRecipes = await prisma.savedRecipe.findMany({
+      where: { familyId: req.user.familyId },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+      select: { name: true },
+    })
+    const savedNames = savedRecipes.map(r => r.name)
+
+    // All names to avoid (recent + saved)
+    const avoidNames = [...new Set([...recentNames, ...savedNames])]
 
     // Get member health info
     const memberProfiles = await prisma.member.findMany({
@@ -67,12 +146,11 @@ exports.suggestRecipes = async (req, res) => {
       },
     })
 
-    const pantryList = pantryItems.map(i => `${i.name} (${i.quantity} ${i.unit})`).join(', ')
-    const memberDetails = members.map(m => {
+    const memberDetails = memberProfiles.map(m => {
       const goals = m.goals || 'healthy eating'
       const dietary = m.dietary || 'none'
       const allergens = m.allergens || 'none'
-      const weight = m.weight ? `${m.weight}${m.weightUnit || 'kg'}` : 'unknown'
+      const weight = m.weight ?`${m.weight}${m.weightUnit || 'kg'}` : 'unknown'
       const height = m.height || 'unknown'
       return `${m.name}: age=${m.age || 'unknown'}, weight=${weight}, height=${height}, health goals=${goals}, dietary restrictions=${dietary}, allergens=${allergens}`
     }).join('; ')
@@ -82,7 +160,14 @@ const expiringContext = expiringItems && expiringItems.length > 0
   ? `\nURGENT - USE EXPIRING ITEMS: The following pantry items are expiring very soon and MUST be used in at least one recipe. Prioritise recipes that use these: ${expiringItems.join(', ')}.\n`
   : ''
 
-const prompt = `You are a helpful family meal planning assistant.
+const avoidContext = avoidNames.length > 0
+  ? `\nSTRICTLY DO NOT suggest any of these recently cooked or saved recipes (user is bored of them): ${avoidNames.join(', ')}.\nIf the user has cooked many meals, be even more creative and explore lesser-known regional dishes.\n`
+  : ''
+
+// Inject randomness seed so Claude doesn't cache the same answer
+const randomSeed = Math.random().toString(36).substring(2, 8)
+
+const prompt = `You are a helpful family meal planning assistant. Session: ${randomSeed}
 
 Number of people being cooked for: ${members.length}
 Member health profiles: ${memberDetails || 'No specific health data'}
@@ -90,6 +175,7 @@ Meal type: ${mealType}
 Cuisine preference: ${cuisine || 'Any cuisine'}
 Items currently in pantry: ${pantryList || 'Pantry is empty'}
 ${expiringContext}
+${avoidContext}
 ${cuisine && cuisine !== 'Any cuisine'
   ? `DISH/CUISINE DIRECTION: The user wants "${cuisine}". Interpret this creatively:
 - If it's a cuisine (e.g. "Punjabi", "South Indian", "Bengali") → suggest authentic regional dishes, NOT the most famous export dish. Think home-cooked meals, regional staples, lesser-known dishes.
@@ -117,6 +203,13 @@ VARIETY RULES - MUST FOLLOW:
 3. Prioritize pantry items heavily — if rice, lentils, or grains are in the pantry, at least one recipe should use them as the base
 4. Vary the protein across recipes if multiple proteins are available in the pantry
 5. Think beyond restaurant classics — include home-style, regional, or lesser-known dishes
+MISSING INGREDIENT RULES - MUST FOLLOW:
+1. Recipe 1: use ONLY pantry items — zero or at most 1 missing ingredient
+2. Recipe 2: maximum 3 missing ingredients
+3. Recipe 3: maximum 5 missing ingredients
+4. NEVER list more than 5 missing ingredients for any recipe — adapt the recipe instead
+5. Sort the 3 recipes by missing ingredient count ascending (fewest first)
+6. If a pantry item is marked LOW STOCK, prefer not to use it as the main ingredient
 
 Please suggest exactly 3 recipes. For each recipe provide:
 - Name
@@ -172,7 +265,20 @@ Respond ONLY with a valid JSON array, no other text:
     
     let text = message.content[0].text.trim()
     text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-    const recipes = JSON.parse(text)
+    let recipes = JSON.parse(text)
+
+    // ── Post-process: remove false positives from missing arrays ─────────────
+    recipes = recipes.map(recipe => {
+      const trulyMissing = (recipe.missing || []).filter(item => {
+        const name = typeof item === 'string' ? item : item.name
+        return !nameMatchesPantry(name, pantryItems)
+      })
+      // Hard cap at 5 missing items
+      return { ...recipe, missing: trulyMissing.slice(0, 5) }
+    })
+
+    // Sort by missing count ascending so recipe 1 always has fewest
+    recipes.sort((a, b) => (a.missing?.length || 0) - (b.missing?.length || 0))
 
     // Increment recipe count for free plan
     if (family.plan === 'free') {
