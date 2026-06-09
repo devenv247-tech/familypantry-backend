@@ -414,13 +414,20 @@ Respond ONLY with a valid JSON object, no other text:
 }`
     const message = await callClaude(anthropic, {
       model: 'claude-sonnet-4-5',
-      max_tokens: 1500,
+      max_tokens: 3000,
       messages: [{ role: 'user', content: prompt }],
-    }, 'suggest_recipes')
+    }, 'family_recipe')
 
     let text = message.content[0].text.trim()
     text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-    const recipe = JSON.parse(text)
+
+    let recipe
+    try {
+      recipe = JSON.parse(text)
+    } catch (parseErr) {
+      console.error('familyRecipe JSON parse error — truncated response:', text.slice(-200))
+      return res.status(500).json({ error: 'Failed to parse recipe response. Please try again.' })
+    }
 
     if (family.plan === 'free') {
       await prisma.family.update({
