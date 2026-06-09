@@ -1,6 +1,9 @@
 // WHO Child Growth Standards — weight-for-age and height-for-age
-// Source: WHO Multicentre Growth Reference Study
-// Values represent median (M) and SD for boys and girls at each month
+// Source: WHO Multicentre Growth Reference Study (2006)
+// https://www.who.int/tools/child-growth-standards
+// Adopted by Health Canada — last verified June 2025
+// These standards have not changed since 2006 and are not expected to change.
+// If WHO publishes new standards, update the M and SD values below accordingly.
 
 const WHO_WEIGHT = {
   girl: {

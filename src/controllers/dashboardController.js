@@ -39,6 +39,15 @@ exports.getStats = async (req, res) => {
       return new Date(item.expiry) < today
     })
 
+    const currentWeek = (() => {
+      const now = new Date()
+      const startOfYear = new Date(now.getFullYear(), 0, 1)
+      const week = Math.ceil(((now - startOfYear) / 86400000 + startOfYear.getDay() + 1) / 7)
+      return `${now.getFullYear()}-W${week}`
+    })()
+
+    const recipeCount = family.recipeWeek === currentWeek ? family.recipeCount : 0
+
     res.json({
       pantryCount,
       memberCount,
@@ -47,7 +56,7 @@ exports.getStats = async (req, res) => {
       expiringSoon: expiringSoon.length,
       expired: expired.length,
       plan: family.plan,
-      recipeCount: family.recipeCount,
+      recipeCount,
       recipeWeek: family.recipeWeek,
     })
   } catch (err) {
