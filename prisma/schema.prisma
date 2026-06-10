@@ -31,6 +31,8 @@ model Family {
   priceHistory         PriceHistory[]
   savedRecipes         SavedRecipe[]
   restockThresholdPercent Int @default(20)
+  digestEnabled           Boolean @default(true)
+  unsubscribeToken        String?
 }
 
 model User {

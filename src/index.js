@@ -170,6 +170,8 @@ app.use('/api/app', publicRoutes)
 app.use('/api/pantry-tools', aiLimiter, pantryToolsRoutes)
 app.use('/api/health-tracker', healthTrackerRoutes)
 app.use('/api/baby', babyRoutes)
+const digestRoutes = require('./routes/digest')
+app.use('/api', digestRoutes)
 
 app.use((err, req, res, next) => {
   // Only log full stack in development
@@ -190,6 +192,8 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 3001
 app.listen(PORT, () => {
   console.log(`Nooka API running on port ${PORT}`)
+  const { scheduleDigest } = require('./jobs/weeklyDigest')
+  scheduleDigest()
 })
 
 // Clean up expired tokens from denylist every 24 hours
