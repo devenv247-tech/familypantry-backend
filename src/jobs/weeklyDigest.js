@@ -174,7 +174,7 @@ const sendWeeklyDigest = async () => {
 
       const firstName = admin.name?.split(' ')[0] || 'there'
       const token = family.unsubscribeToken || family.id
-      const plan = family.plan?.toLowerCase() || 'free'
+      const familyPlan = family.plan?.toLowerCase() || 'free'
 
       // Skip if pantry too empty — send one-time nudge instead
       console.log(`[digest] pantryCount: ${pantryCount}`)
@@ -200,21 +200,21 @@ const sendWeeklyDigest = async () => {
       // Build and send the right email per plan
       let html, subject
 
-      if (plan === 'premium') {
+      if (familyPlan === 'premium') {
         const pantryItems = await prisma.pantryItem.findMany({
           where: { familyId: family.id, quantity: { gt: 0 } },
           take: 20,
         })
-        const recipes = await getRecipeSuggestions(pantryItems, plan)
+        const recipes = await getRecipeSuggestions(pantryItems, familyPlan)
         html = buildPremiumEmail(firstName, expiringItems, recipes, token)
         subject = `Your weekly Nooka digest — ${expiringItems.length > 0 ? `${expiringItems.length} items expiring` : 'all good this week'} 🍽️`
 
-      } else if (plan === 'family') {
+      } else if (familyPlan === 'family') {
         const pantryItems = await prisma.pantryItem.findMany({
           where: { familyId: family.id, quantity: { gt: 0 } },
           take: 20,
         })
-        const recipes = await getRecipeSuggestions(pantryItems, plan)
+        const recipes = await getRecipeSuggestions(pantryItems, familyPlan)
         html = buildFamilyEmail(firstName, expiringItems, recipes, token)
         subject = `Your weekly Nooka digest — ${expiringItems.length > 0 ? `${expiringItems.length} items expiring` : 'all good this week'} 🛒`
 
