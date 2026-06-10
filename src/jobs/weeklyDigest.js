@@ -17,10 +17,10 @@ const getExpiringItems = async (familyId) => {
   return prisma.pantryItem.findMany({
     where: {
       familyId,
-      expiryDate: { lte: in7Days, gte: new Date() },
+      predictedExpiry: { lte: in7Days, gte: new Date() },
       quantity: { gt: 0 },
     },
-    orderBy: { expiryDate: 'asc' },
+    orderBy: { predictedExpiry: 'asc' },
     take: 5,
   })
 }
