@@ -33,7 +33,7 @@ const getPantryCount = async (familyId) => {
 
 const getAdminUser = async (familyId) => {
   return prisma.user.findFirst({
-    where: { familyId, role: 'admin' },
+    where: { familyId, isAdmin: true },
     select: { email: true, name: true },
   })
 }
