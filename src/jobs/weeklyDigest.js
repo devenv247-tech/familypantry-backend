@@ -168,13 +168,15 @@ const sendWeeklyDigest = async () => {
         getExpiringItems(family.id),
       ])
 
-      if (!admin) continue
+      console.log(`[digest] Family: ${family.name}, plan: ${plan}, pantryCount: ${pantryCount}, digestEnabled: ${family.digestEnabled}, admin: ${admin?.email}`)
+    if (!admin) { console.log(`[digest] Skipping — no admin found`); continue }
 
       const firstName = admin.name?.split(' ')[0] || 'there'
       const token = family.unsubscribeToken || family.id
       const plan = family.plan?.toLowerCase() || 'free'
 
       // Skip if pantry too empty — send one-time nudge instead
+      console.log(`[digest] pantryCount: ${pantryCount}`)
       if (pantryCount < 15) {
         // Only nudge if they have something but not enough
         if (pantryCount > 0 && pantryCount < 15) {
