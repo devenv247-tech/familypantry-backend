@@ -161,6 +161,7 @@ const sendWeeklyDigest = async () => {
   console.log(`[digest] Processing ${families.length} families`)
 
   for (const family of families) {
+    console.log(`[digest] Processing family: ${family.id} ${family.name}`)
     try {
       const [admin, pantryCount, expiringItems] = await Promise.all([
         getAdminUser(family.id),
@@ -233,8 +234,8 @@ const sendWeeklyDigest = async () => {
 
       console.log(`[digest] Sent to ${admin.email} (${plan})`)
 
-    } catch (err) {
-      console.error(`[digest] Failed for family ${family.id}:`, err.message)
+   } catch (err) {
+      console.log(`[digest] ERROR family ${family.id}: ${err.message} --- ${err.stack}`)
     }
   }
 
