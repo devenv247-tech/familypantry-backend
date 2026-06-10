@@ -169,7 +169,7 @@ const sendWeeklyDigest = async () => {
         getExpiringItems(family.id),
       ])
 
-      console.log(`[digest] Family: ${family.name}, plan: ${plan}, pantryCount: ${pantryCount}, digestEnabled: ${family.digestEnabled}, admin: ${admin?.email}`)
+      console.log(`[digest] Family: ${family.name}, plan: ${family.plan}, pantryCount: ${pantryCount}, digestEnabled: ${family.digestEnabled}, admin: ${admin?.email}`)
     if (!admin) { console.log(`[digest] Skipping — no admin found`); continue }
 
       const firstName = admin.name?.split(' ')[0] || 'there'
@@ -232,7 +232,7 @@ const sendWeeklyDigest = async () => {
         html,
       })
 
-      console.log(`[digest] Sent to ${admin.email} (${plan})`)
+      console.log(`[digest] Sent to ${admin.email} (${familyPlan})`)
 
    } catch (err) {
       console.log(`[digest] ERROR family ${family.id}: ${err.message} --- ${err.stack}`)
