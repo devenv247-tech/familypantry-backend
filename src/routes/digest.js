@@ -3,7 +3,6 @@ const router = express.Router()
 const auth = require('../middleware/auth')
 const prisma = require('../utils/prisma')
 const { sendWeeklyDigest } = require('../jobs/weeklyDigest')
-const adminAuth = require('../middleware/adminAuth')
 
 // Unsubscribe via token — no auth needed (clicked from email)
 router.get('/unsubscribe', async (req, res) => {
@@ -59,7 +58,7 @@ router.put('/digest-preference', auth, async (req, res) => {
 })
 
 // Manual trigger — admin only (for testing)
-router.post('/digest/send-now', adminAuth, async (req, res) => {
+router.post('/digest/send-now', auth, async (req, res) => {
   try {
     await sendWeeklyDigest()
     res.json({ success: true, message: 'Digest sent' })
