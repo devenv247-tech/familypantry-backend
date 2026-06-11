@@ -34,6 +34,7 @@ const getPantryCount = async (familyId) => {
 const getAdminUser = async (familyId) => {
   return prisma.user.findFirst({
     where: { familyId },
+    orderBy: { createdAt: 'asc' },
     select: { email: true, name: true },
   })
 }
@@ -173,6 +174,40 @@ const sendWeeklyDigest = async () => {
       const firstName = admin.name?.split(' ')[0] || 'there'
       const token = family.unsubscribeToken || family.id
       const familyPlan = family.plan?.toLowerCase() || 'free'
+
+      if (pantryCount === 0) {
+        // Re-engagement email — send once, then once a month max
+        const now = new Date()
+        const lastSent = family.reengagementSentAt
+        const shouldSend = !lastSent || (now - new Date(lastSent)) > 30 * 24 * 60 * 60 * 1000
+
+        if (shouldSend) {
+          await resend.emails.send({
+            from: FROM_EMAIL,
+            to: admin.email,
+            subject: `${firstName}, you could be saving money on groceries 🛒`,
+            html: buildEmailWrapper(
+              firstName,
+              `<p style="color:#374151">Your Nooka pantry is empty — and you're missing out on some real benefits:</p>
+               <ul style="color:#374151;padding-left:20px;line-height:1.8">
+                 <li>🥗 <strong>Healthier meals</strong> — get recipe ideas tailored to your family's dietary needs</li>
+                 <li>💰 <strong>Less food waste</strong> — Canadians throw away an average of <strong>$1,300 of food per year</strong>. Nooka helps you use what you have.</li>
+                 <li>🛒 <strong>Smarter grocery trips</strong> — auto-generated lists so you never over-buy</li>
+                 <li>⏰ <strong>Expiry alerts</strong> — get notified before food goes bad</li>
+               </ul>
+               <p style="color:#374151;margin-top:16px">It takes less than 2 minutes to add your first 5 items and unlock your first recipe suggestions.</p>`,
+              [`<a href="${BASE_URL}/login?redirect=/app/pantry" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">Set up my pantry →</a>`],
+              token
+            )
+          })
+
+          await prisma.family.update({
+            where: { id: family.id },
+            data: { reengagementSentAt: now }
+          })
+        }
+        continue
+      }
 
       if (pantryCount < 15) {
         if (pantryCount > 0) {

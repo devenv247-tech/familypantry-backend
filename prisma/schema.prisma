@@ -33,6 +33,7 @@ model Family {
   restockThresholdPercent Int @default(20)
   digestEnabled           Boolean @default(true)
   unsubscribeToken        String?
+  reengagementSentAt      DateTime?
 }
 
 model User {
