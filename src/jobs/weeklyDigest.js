@@ -40,11 +40,11 @@ const getAdminUser = async (familyId) => {
 
 // ─── AI recipe suggestions (Family/Premium only) ──────────────────────────────
 
-const getRecipeSuggestions = async (pantryItems, plan) => {
+const getRecipeSuggestions = async (pantryItems, familyPlan) => {
   if (!pantryItems.length) return []
   try {
     const itemNames = pantryItems.map(i => i.name).join(', ')
-    const count = plan === 'premium' ? 3 : 2
+    const count = familyPlan === 'premium' ? 3 : 2
     const msg = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 400,
@@ -71,7 +71,7 @@ const buildFreeEmail = (name, expiringItems, unsubscribeToken) => {
     : `<p style="color:#374151">Your pantry looks good this week — nothing expiring soon!</p>`
 
   return buildEmailWrapper(name, expiryLine, [
-    `<a href="${BASE_URL}/app/pantry" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">View my pantry →</a>`
+    `<a href="${BASE_URL}/login?redirect=/app/pantry" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">View my pantry →</a>`
   ], unsubscribeToken)
 }
 
@@ -88,7 +88,7 @@ const buildFamilyEmail = (name, expiringItems, recipes, unsubscribeToken) => {
     : ''
 
   return buildEmailWrapper(name, expirySection + recipeSection, [
-    `<a href="${BASE_URL}/app/recipes" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">See full recipes →</a>`
+    `<a href="${BASE_URL}/login?redirect=/app/recipes" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">See full recipes →</a>`
   ], unsubscribeToken)
 }
 
@@ -107,7 +107,7 @@ const buildPremiumEmail = (name, expiringItems, recipes, unsubscribeToken) => {
   const tipSection = `<p style="color:#374151;margin-top:16px">💡 <strong>Tip:</strong> Use your meal planner to schedule these meals and auto-generate your grocery list.</p>`
 
   return buildEmailWrapper(name, expirySection + recipeSection + tipSection, [
-    `<a href="${BASE_URL}/app/mealplan" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">Open my meal plan →</a>`
+    `<a href="${BASE_URL}/login?redirect=/app/mealplan" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">Open my meal plan →</a>`
   ], unsubscribeToken)
 }
 
@@ -119,7 +119,7 @@ const buildEmailWrapper = (name, bodyContent, ctaButtons, unsubscribeToken) => {
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="margin:0;padding:0;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
   <div style="max-width:520px;margin:32px auto;background:#fff;border-radius:12px;border:1px solid #e5e7eb;overflow:hidden">
-    
+
     <!-- Header -->
     <div style="background:#2563eb;padding:24px 32px">
       <p style="margin:0;color:#fff;font-size:20px;font-weight:700">Nooka</p>
@@ -161,7 +161,6 @@ const sendWeeklyDigest = async () => {
   console.log(`[digest] Processing ${families.length} families`)
 
   for (const family of families) {
-    console.log(`[digest] Processing family: ${family.id} ${family.name}`)
     try {
       const [admin, pantryCount, expiringItems] = await Promise.all([
         getAdminUser(family.id),
@@ -169,18 +168,14 @@ const sendWeeklyDigest = async () => {
         getExpiringItems(family.id),
       ])
 
-      console.log(`[digest] Family: ${family.name}, plan: ${family.plan}, pantryCount: ${pantryCount}, digestEnabled: ${family.digestEnabled}, admin: ${admin?.email}`)
-    if (!admin) { console.log(`[digest] Skipping — no admin found`); continue }
+      if (!admin) continue
 
       const firstName = admin.name?.split(' ')[0] || 'there'
       const token = family.unsubscribeToken || family.id
       const familyPlan = family.plan?.toLowerCase() || 'free'
 
-      // Skip if pantry too empty — send one-time nudge instead
-      console.log(`[digest] pantryCount: ${pantryCount}`)
       if (pantryCount < 15) {
-        // Only nudge if they have something but not enough
-        if (pantryCount > 0 && pantryCount < 15) {
+        if (pantryCount > 0) {
           await resend.emails.send({
             from: FROM_EMAIL,
             to: admin.email,
@@ -189,7 +184,7 @@ const sendWeeklyDigest = async () => {
               firstName,
               `<p style="color:#374151">You've added <strong>${pantryCount} item${pantryCount > 1 ? 's' : ''}</strong> to your pantry — nice start! Add a few more and Nooka will start sending you weekly recipe ideas and expiry alerts.</p>
                <p style="color:#374151">Tip: Add at least <strong>15 items</strong> to get the most out of your digest.</p>`,
-              [`<a href="${BASE_URL}/app/pantry" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">Add items to my pantry →</a>`],
+              [`<a href="${BASE_URL}/login?redirect=/app/pantry" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">Add items to my pantry →</a>`],
               token
             )
           })
@@ -197,7 +192,6 @@ const sendWeeklyDigest = async () => {
         continue
       }
 
-      // Build and send the right email per plan
       let html, subject
 
       if (familyPlan === 'premium') {
@@ -232,10 +226,10 @@ const sendWeeklyDigest = async () => {
         html,
       })
 
-      console.log(`[digest] Sent to ${admin.email} (${familyPlan})`)
+      console.log(`[digest] Sent to ${admin.email} (${familyPlan}) ✓`)
 
-   } catch (err) {
-      console.log(`[digest] ERROR family ${family.id}: ${err.message} --- ${err.stack}`)
+    } catch (err) {
+      console.error(`[digest] Failed for family ${family.id}:`, err.message)
     }
   }
 

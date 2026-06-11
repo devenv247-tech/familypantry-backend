@@ -59,17 +59,12 @@ router.put('/digest-preference', auth, async (req, res) => {
 
 // Manual trigger — admin only (for testing)
 router.post('/digest/send-now', auth, async (req, res) => {
-  const logs = []
-  const origLog = console.log
-  console.log = (...args) => { logs.push(args.join(' ')); origLog(...args) }
   try {
     await sendWeeklyDigest()
-    console.log = origLog
-    res.json({ success: true, message: 'Digest sent', logs })
+    res.json({ success: true, message: 'Digest sent' })
   } catch (err) {
-    console.log = origLog
     console.error('Manual digest error:', err)
-    res.status(500).json({ error: err.message, logs })
+    res.status(500).json({ error: 'Failed to send digest' })
   }
 })
 
