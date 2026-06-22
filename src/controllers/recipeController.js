@@ -258,7 +258,7 @@ Respond ONLY with a valid JSON array, no other text:
 ]`
 
     const message = await callClaude(anthropic, {
-      model: 'claude-sonnet-4-5',
+      model: 'claude-sonnet-4-6',
       max_tokens: 4000,
       messages: [{ role: 'user', content: prompt }],
     }, 'suggest_recipes')
@@ -413,7 +413,7 @@ Respond ONLY with a valid JSON object, no other text:
 }
 }`
     const message = await callClaude(anthropic, {
-      model: 'claude-sonnet-4-5',
+      model: 'claude-sonnet-4-6',
       max_tokens: 3000,
       messages: [{ role: 'user', content: prompt }],
     }, 'family_recipe')
@@ -531,7 +531,7 @@ Respond ONLY with a valid JSON array, no other text:
 ]`
 
     const message = await callClaude(anthropic, {
-      model: 'claude-sonnet-4-5',
+      model: 'claude-sonnet-4-6',
       max_tokens: 2000,
       messages: [{ role: 'user', content: prompt }],
     }, 'suggest_drinks')
@@ -611,7 +611,7 @@ Respond ONLY with valid JSON, no markdown:
 }`
 
     const response = await callClaude(anthropic, {
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       max_tokens: 500,
       messages: [{ role: 'user', content: prompt }]
     }, 'suggest_recipes')

@@ -100,7 +100,7 @@ const getKidsSummary = async (req, res) => {
         const goodNutrients = nutrients.filter(n => n.pct >= 80).map(n => n.label)
 
         const message = await anthropic.messages.create({
-          model: 'claude-sonnet-4-20250514',
+          model: 'claude-sonnet-4-6',
           max_tokens: 120,
           messages: [{
             role: 'user',

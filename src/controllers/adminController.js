@@ -324,7 +324,7 @@ exports.getApiStatus = async (req, res) => {
       const Anthropic = require('@anthropic-ai/sdk')
       const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
       await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-6',
         max_tokens: 10,
         messages: [{ role: 'user', content: 'Hi' }]
       })

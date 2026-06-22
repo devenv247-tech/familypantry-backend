@@ -281,7 +281,7 @@ Respond ONLY with valid JSON array, no markdown, no extra text:
 ]`
 
     const message = await callClaude(anthropic, {
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       max_tokens: 16000,
       messages: [{ role: 'user', content: prompt }]
     }, 'meal_plan_generate')

@@ -47,7 +47,7 @@ const getRecipeSuggestions = async (pantryItems, familyPlan) => {
     const itemNames = pantryItems.map(i => i.name).join(', ')
     const count = familyPlan === 'premium' ? 3 : 2
     const msg = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       max_tokens: 400,
       messages: [{
         role: 'user',
