@@ -369,12 +369,22 @@ Respond ONLY with a valid JSON object in this exact format:
       messages: [{ role: 'user', content: prompt }]
     })
 
-    const raw = response.content[0].text.replace(/```json|```/g, '').trim()
-    const recipe = JSON.parse(raw)
+    let raw = response.content[0].text
+      .replace(/```json\n?/g, '')
+      .replace(/```\n?/g, '')
+      .trim()
+
+    let recipe
+    try {
+      recipe = JSON.parse(raw)
+    } catch (parseErr) {
+      console.error('Baby recipe JSON parse error. Raw response:', raw.slice(0, 500))
+      return res.status(500).json({ error: 'Failed to parse recipe. Please try again.' })
+    }
 
     res.json(recipe)
   } catch (err) {
-    console.error('generateBabyRecipe error:', err)
+    console.error('generateBabyRecipe error:', err.message)
     res.status(500).json({ error: 'Failed to generate baby recipe' })
   }
 }
