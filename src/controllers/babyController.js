@@ -374,6 +374,8 @@ Respond ONLY with a valid JSON object in this exact format:
       .replace(/```\n?/g, '')
       .trim()
 
+    console.log('BABY RECIPE RAW RESPONSE:', JSON.stringify(raw.slice(0, 800)))
+
     let recipe
     try {
       recipe = JSON.parse(raw)
