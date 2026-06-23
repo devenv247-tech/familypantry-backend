@@ -369,12 +369,14 @@ Respond ONLY with a valid JSON object in this exact format:
       messages: [{ role: 'user', content: prompt }]
     })
 
-    let raw = response.content[0].text
+ let raw = response.content[0].text
       .replace(/```json\n?/g, '')
       .replace(/```\n?/g, '')
       .trim()
 
-    console.log('BABY RECIPE RAW RESPONSE:', JSON.stringify(raw.slice(0, 800)))
+    console.log('=== BABY RECIPE RAW ===', raw.slice(0, 1000))
+    console.log('=== BABY RECIPE LENGTH ===', raw.length)
+    console.log('=== FIRST CHAR CODE ===', raw.charCodeAt(0))
 
     let recipe
     try {
