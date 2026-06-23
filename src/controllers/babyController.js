@@ -348,7 +348,7 @@ Respond ONLY with a valid JSON object in this exact format:
   "texture": "${stage.texture}",
   "time": "X mins",
   "portions": "X ice cube trays / X tbsp",
-  "freezable": true or false,
+  "freezable": true,
   "ingredients": [
     { "name": "ingredient", "amount": "amount", "prep": "how to prepare e.g. steamed and mashed" }
   ],
