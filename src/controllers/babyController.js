@@ -360,6 +360,7 @@ Respond ONLY with a valid JSON object. No markdown, no backticks, no explanation
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 1000,
+      system: 'You are a pediatric nutrition API. You MUST respond with only a valid raw JSON object. No markdown, no backticks, no explanation, no text before or after the JSON. Start your response with { and end with }.',
       messages: [{ role: 'user', content: prompt }]
     })
 
