@@ -49,6 +49,7 @@ const getRecipeSuggestions = async (pantryItems, familyPlan) => {
     const msg = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 400,
+      system: 'You are a JSON API. Respond ONLY with raw JSON. No markdown, no backticks, no explanation. Start with [ and end with ].',
       messages: [{
         role: 'user',
         content: `Suggest ${count} quick dinner recipes using some of these pantry items: ${itemNames}.

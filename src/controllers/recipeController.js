@@ -415,6 +415,7 @@ Respond ONLY with a valid JSON object, no other text:
     const message = await callClaude(anthropic, {
       model: 'claude-sonnet-4-6',
       max_tokens: 3000,
+      system: 'You are a JSON API. Respond ONLY with raw JSON. No markdown, no backticks, no explanation. Start with { and end with }.',
       messages: [{ role: 'user', content: prompt }],
     }, 'family_recipe')
 
@@ -613,6 +614,7 @@ Respond ONLY with valid JSON, no markdown:
     const response = await callClaude(anthropic, {
       model: 'claude-sonnet-4-6',
       max_tokens: 500,
+      system: 'You are a JSON API. Respond ONLY with raw JSON. No markdown, no backticks, no explanation. Start with { and end with }.',
       messages: [{ role: 'user', content: prompt }]
     }, 'suggest_recipes')
 

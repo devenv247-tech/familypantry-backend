@@ -169,6 +169,7 @@ Respond ONLY with a valid JSON array:
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 500,
+      system: 'You are a JSON API. Respond ONLY with raw JSON. No markdown, no backticks, no explanation. Start with [ or { and end with ] or }.',
       messages: [{ role: 'user', content: prompt }],
     })
 

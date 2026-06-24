@@ -219,6 +219,7 @@ Respond ONLY with a valid JSON object, no other text.`
     const message = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 200,
+      system: 'You are a JSON API. Respond ONLY with raw JSON. No markdown, no backticks, no explanation. Start with { and end with }.',
       messages: [{ role: 'user', content: prompt }],
     })
 

@@ -84,6 +84,7 @@ exports.lookupNutrition = async (req, res) => {
     const message = await callClaude(anthropic, {
       model: 'claude-sonnet-4-6',
       max_tokens: 500,
+      system: 'You are a JSON API. Respond ONLY with raw JSON. No markdown, no backticks, no explanation. Start with { and end with }.',
       messages: [{
         role: 'user',
         content: `You are a nutrition database for Canadian food. Look up the nutrition info for: "${mealName}"
