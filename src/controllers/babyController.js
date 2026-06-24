@@ -364,10 +364,11 @@ Respond ONLY with a valid JSON object. No markdown, no backticks, no explanation
     })
 
     const raw = response.content[0].text
+    console.error('BABY RAW RESPONSE:', JSON.stringify(raw.slice(0, 600)))
     const jsonMatch = raw.match(/\{[\s\S]*\}/)
 
     if (!jsonMatch) {
-      console.error('Baby recipe: no JSON found in response:', raw.slice(0, 500))
+      console.error('BABY NO JSON MATCH, raw was:', raw.slice(0, 600))
       return res.status(500).json({ error: 'Failed to parse recipe. Please try again.' })
     }
 
