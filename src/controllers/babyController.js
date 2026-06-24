@@ -365,7 +365,6 @@ Respond ONLY with a valid JSON object. No markdown, no backticks, no explanation
     })
 
     const raw = response.content[0].text
-    console.error('BABY RAW RESPONSE:', JSON.stringify(raw.slice(0, 600)))
     const jsonMatch = raw.match(/\{[\s\S]*\}/)
 
     if (!jsonMatch) {
