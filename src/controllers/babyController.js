@@ -14,8 +14,8 @@ const getAgeMonths = (birthDate) => {
 const getStage = (months) => {
   if (months === null) return null
   if (months < 6)  return { stage: 0, label: 'Breast milk / formula only',     texture: null }
-  if (months < 7)  return { stage: 1, label: 'First iron-rich purées',          texture: 'smooth purée' }
-  if (months < 9)  return { stage: 2, label: 'Mashed & lumpy textures',         texture: 'mashed' }
+  if (months < 7)  return { stage: 1, label: 'First iron-rich purees',          texture: 'smooth puree' }
+  if (months < 9)  return { stage: 2, label: 'Mashed and lumpy textures',       texture: 'mashed' }
   if (months < 12) return { stage: 3, label: 'Soft finger foods',               texture: 'soft chunks' }
   if (months < 18) return { stage: 4, label: 'Most family foods',               texture: 'soft family food' }
   return              { stage: 5, label: 'Toddler table foods',                  texture: 'family table' }
@@ -200,7 +200,6 @@ exports.logGrowth = async (req, res) => {
     })
     if (!member) return res.status(404).json({ error: 'Baby member not found' })
 
-    // Save to GrowthLog
     const log = await prisma.growthLog.create({
       data: {
         memberId,
@@ -213,7 +212,6 @@ exports.logGrowth = async (req, res) => {
       }
     })
 
-    // Also update the member's current weight/height
     await prisma.member.update({
       where: { id: memberId },
       data: {
@@ -223,7 +221,6 @@ exports.logGrowth = async (req, res) => {
       }
     })
 
-    // Return log with WHO assessment
     const months = getAgeMonths(member.birthDate)
     const weightKg = weightUnit === 'lbs' ? parseFloat(weight) * 0.453592 : parseFloat(weight)
     const heightCm = heightUnit === 'in' ? parseFloat(height) * 2.54 : parseFloat(height)
@@ -302,16 +299,13 @@ exports.generateBabyRecipe = async (req, res) => {
       return res.status(400).json({ error: 'No solid food recipes for babies under 6 months. Breast milk or formula only.' })
     }
 
-    // Get pantry
     const pantryItems = await prisma.pantryItem.findMany({
       where: { familyId: req.user.familyId }
     })
     const pantryList = pantryItems.map(i => `${i.name} (${i.quantity} ${i.unit})`).join(', ') || 'basic pantry staples'
 
-    // Already introduced allergens
     const introducedAllergens = member.allergenIntroductions.map(a => a.allergen).join(', ') || 'none yet'
 
-    // Known allergen reactions to avoid
     const severeAllergens = member.allergenIntroductions
       .filter(a => a.reaction === 'severe')
       .map(a => a.allergen).join(', ') || 'none'
@@ -339,7 +333,7 @@ STRICT SAFETY RULES — NEVER VIOLATE:
 9. NEVER include allergens that had severe reactions: ${severeAllergens || 'none'}
 10. Portions appropriate for ${months}-month-old baby
 
-Respond ONLY with a valid JSON object in this exact format:
+Respond ONLY with a valid JSON object. No markdown, no backticks, no explanation. Just raw JSON:
 {
   "name": "Recipe name",
   "icon": "single emoji",
@@ -369,14 +363,19 @@ Respond ONLY with a valid JSON object in this exact format:
       messages: [{ role: 'user', content: prompt }]
     })
 
- let raw = response.content[0].text
-    raw = raw.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim()
+    const raw = response.content[0].text
+    const jsonMatch = raw.match(/\{[\s\S]*\}/)
+
+    if (!jsonMatch) {
+      console.error('Baby recipe: no JSON found in response:', raw.slice(0, 500))
+      return res.status(500).json({ error: 'Failed to parse recipe. Please try again.' })
+    }
 
     let recipe
     try {
-      recipe = JSON.parse(raw)
+      recipe = JSON.parse(jsonMatch[0])
     } catch (parseErr) {
-      console.error('Baby recipe JSON parse error. Raw response:', raw.slice(0, 500))
+      console.error('Baby recipe JSON parse error:', jsonMatch[0].slice(0, 500))
       return res.status(500).json({ error: 'Failed to parse recipe. Please try again.' })
     }
 
@@ -454,7 +453,6 @@ exports.generatePediatricianReport = async (req, res) => {
     if (member.allergenIntroductions.length === 0) {
       doc.fontSize(10).font('Helvetica').fillColor('#666').text('No allergen introductions recorded yet.')
     } else {
-      // Table header
       doc.fontSize(9).font('Helvetica-Bold').fillColor('#374151')
       doc.text('Allergen', 50, doc.y, { width: 120 })
       doc.text('Date Introduced', 170, doc.y - doc.currentLineHeight(), { width: 130 })
@@ -489,7 +487,6 @@ exports.generatePediatricianReport = async (req, res) => {
     if (member.feedingLogs.length === 0) {
       doc.fontSize(10).font('Helvetica').fillColor('#666').text('No feeding entries recorded yet.')
     } else {
-      // Table header
       doc.fontSize(9).font('Helvetica-Bold').fillColor('#374151')
       doc.text('Date', 50, doc.y, { width: 100 })
       doc.text('Food', 150, doc.y - doc.currentLineHeight(), { width: 130 })
@@ -501,7 +498,6 @@ exports.generatePediatricianReport = async (req, res) => {
       doc.moveDown(0.3)
 
       member.feedingLogs.forEach((log, i) => {
-        // Page break if needed
         if (doc.y > 720) {
           doc.addPage()
           doc.moveDown(1)
@@ -528,7 +524,7 @@ exports.generatePediatricianReport = async (req, res) => {
     doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke('#e5e7eb')
     doc.moveDown(0.5)
     doc.fontSize(8).font('Helvetica').fillColor('#9ca3af')
-      .text('Generated by Nooka — AI-powered meal planning for Canadian families — nooka.ca', { align: 'center' })
+      .text('Generated by Nooka - meal planning for Canadian families — nooka.ca', { align: 'center' })
     doc.text('This report is for informational purposes only. Always consult your pediatrician or public health nurse for medical advice.', { align: 'center' })
 
     doc.end()
