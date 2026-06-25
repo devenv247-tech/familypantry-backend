@@ -193,10 +193,18 @@ exports.calculateIngredients = async (req, res) => {
       return res.status(400).json({ error: 'Ingredients array required' })
     }
 
-    const ingredientList = ingredients
-      .filter(i => i.name && i.quantity)
-      .map(i => `- ${i.quantity} ${i.unit || 'g'} ${i.name}`)
-      .join('\n')
+    // Support both structured ingredients array and free-text description
+    const freeText = req.body.description || null
+
+    let ingredientList = ''
+    if (freeText) {
+      ingredientList = freeText.trim()
+    } else {
+      ingredientList = ingredients
+        .filter(i => i.name && i.quantity)
+        .map(i => `- ${i.quantity} ${i.unit || 'g'} ${i.name}`)
+        .join('\n')
+    }
 
     if (!ingredientList) {
       return res.status(400).json({ error: 'No valid ingredients provided' })
@@ -210,30 +218,32 @@ exports.calculateIngredients = async (req, res) => {
       system: 'You are a JSON API. Respond ONLY with raw JSON. No markdown, no backticks, no explanation. Start with { and end with }.',
       messages: [{
         role: 'user',
-        content: `Calculate the total combined nutrition for this home-cooked meal using these ingredients:
-
-${ingredientList}
-
-Sum up all ingredients and return the total nutrition for the entire dish as prepared.
+        content: `Calculate the total combined nutrition for this meal based on the description below.
+The description may be free-text natural language or a structured ingredient list — handle both.
+Identify all ingredients and quantities mentioned, estimate any that are vague (e.g. "a handful", "1 spoon").
+Sum up all ingredients and return the total nutrition for the entire meal as consumed.
 Use standard Canadian nutrition data. Be accurate — this is for health tracking.
+
+Meal description:
+${ingredientList}
 
 Respond ONLY with valid JSON:
 {
   "found": true,
-  "mealName": "Custom home-cooked meal",
-  "servingSize": "full recipe",
-  "calories": 850,
-  "protein": 45,
-  "carbs": 80,
-  "fat": 30,
-  "fiber": 8,
-  "sugar": 6,
-  "sodium": 1200,
-  "calcium": 150,
-  "iron": 4.2,
-  "vitaminD": 20,
+  "mealName": "descriptive name based on what was described",
+  "servingSize": "full recipe / 1 serving",
+  "calories": 450,
+  "protein": 28,
+  "carbs": 52,
+  "fat": 14,
+  "fiber": 6,
+  "sugar": 18,
+  "sodium": 320,
+  "calcium": 200,
+  "iron": 2.1,
+  "vitaminD": 40,
   "confidence": "medium",
-  "source": "calculated from ingredients"
+  "source": "calculated from description"
 }`
       }]
     }, 'ingredient_calculator')
