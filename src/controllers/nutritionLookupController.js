@@ -188,13 +188,13 @@ calcium is in mg, iron is in mg, vitaminD is in IU. Estimate based on ingredient
 // Calculate macros from a list of ingredients
 exports.calculateIngredients = async (req, res) => {
   try {
-    const { ingredients } = req.body
-    if (!ingredients || !Array.isArray(ingredients) || ingredients.length === 0) {
-      return res.status(400).json({ error: 'Ingredients array required' })
-    }
+    const { ingredients, description } = req.body
 
-    // Support both structured ingredients array and free-text description
-    const freeText = req.body.description || null
+    // Must have either a description string or a valid ingredients array
+    const freeText = description?.trim() || null
+    if (!freeText && (!ingredients || !Array.isArray(ingredients) || ingredients.length === 0)) {
+      return res.status(400).json({ error: 'Provide a description or ingredients list' })
+    }
 
     let ingredientList = ''
     if (freeText) {
