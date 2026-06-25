@@ -39,6 +39,48 @@ const getAdminUser = async (familyId) => {
   })
 }
 
+// ─── Nutrition insights (Premium only) ───────────────────────────────────────
+
+const getNutritionInsights = async (familyId) => {
+  try {
+    const sevenDaysAgo = new Date()
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+
+    const logs = await prisma.nutritionLog.findMany({
+      where: { familyId, loggedAt: { gte: sevenDaysAgo } },
+      orderBy: { loggedAt: 'desc' },
+    })
+
+    if (logs.length === 0) return null
+
+    // Group by member
+    const byMember = {}
+    for (const log of logs) {
+      const name = log.memberName || 'Family'
+      if (!byMember[name]) byMember[name] = []
+      byMember[name].push(log)
+    }
+
+    // Per member stats
+    const memberStats = Object.entries(byMember).map(([name, memberLogs]) => {
+      const days = [...new Set(memberLogs.map(l => new Date(l.loggedAt).toDateString()))].length
+      const avgCalories = Math.round(memberLogs.reduce((s, l) => s + (l.calories || 0), 0) / Math.max(days, 1))
+      const avgProtein = Math.round(memberLogs.reduce((s, l) => s + (l.protein || 0), 0) / Math.max(days, 1))
+      const topMeal = memberLogs.reduce((top, l) => {
+        const count = memberLogs.filter(x => x.recipeName === l.recipeName).length
+        return count > (top.count || 0) ? { name: l.recipeName, count } : top
+      }, {})
+
+      return { name, days, avgCalories, avgProtein, topMeal: topMeal.name || null }
+    })
+
+    return { memberStats, totalLogs: logs.length }
+  } catch (err) {
+    console.error('getNutritionInsights error:', err)
+    return null
+  }
+}
+
 // ─── AI recipe suggestions (Family/Premium only) ──────────────────────────────
 
 const getRecipeSuggestions = async (pantryItems, familyPlan) => {
@@ -94,7 +136,7 @@ const buildFamilyEmail = (name, expiringItems, recipes, unsubscribeToken) => {
   ], unsubscribeToken)
 }
 
-const buildPremiumEmail = (name, expiringItems, recipes, unsubscribeToken) => {
+const buildPremiumEmail = (name, expiringItems, recipes, nutritionInsights, unsubscribeToken) => {
   const expirySection = expiringItems.length > 0
     ? `<p style="color:#374151"><strong>⏰ Expiring soon:</strong> ${expiringItems.map(i => i.name).join(', ')}</p>`
     : `<p style="color:#374151">✅ Nothing expiring this week — great job!</p>`
@@ -108,8 +150,48 @@ const buildPremiumEmail = (name, expiringItems, recipes, unsubscribeToken) => {
 
   const tipSection = `<p style="color:#374151;margin-top:16px">💡 <strong>Tip:</strong> Use your meal planner to schedule these meals and auto-generate your grocery list.</p>`
 
-  return buildEmailWrapper(name, expirySection + recipeSection + tipSection, [
-    `<a href="${BASE_URL}/login?redirect=/app/mealplan" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">Open my meal plan →</a>`
+  // Nutrition insights section — only if data exists
+  let nutritionSection = ''
+  if (nutritionInsights?.memberStats?.length > 0) {
+    const rows = nutritionInsights.memberStats.map(m => `
+      <tr>
+        <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-weight:600;color:#111827">${m.name}</td>
+        <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;color:#374151;text-align:center">${m.avgCalories} kcal</td>
+        <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;color:#374151;text-align:center">${m.avgProtein}g</td>
+        <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;color:#6b7280;font-size:12px">${m.topMeal ? m.topMeal : '—'}</td>
+      </tr>`).join('')
+
+    nutritionSection = `
+      <div style="margin-top:24px;border-top:1px solid #e5e7eb;padding-top:20px">
+        <p style="color:#111827;font-weight:600;margin:0 0 12px">📊 This week's nutrition snapshot</p>
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead>
+            <tr style="background:#f9fafb">
+              <th style="padding:8px 12px;text-align:left;color:#6b7280;font-weight:600;border-bottom:2px solid #e5e7eb">Member</th>
+              <th style="padding:8px 12px;text-align:center;color:#6b7280;font-weight:600;border-bottom:2px solid #e5e7eb">Avg cal/day</th>
+              <th style="padding:8px 12px;text-align:center;color:#6b7280;font-weight:600;border-bottom:2px solid #e5e7eb">Avg protein</th>
+              <th style="padding:8px 12px;text-align:left;color:#6b7280;font-weight:600;border-bottom:2px solid #e5e7eb">Top meal</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <p style="color:#6b7280;font-size:12px;margin-top:10px">
+          Based on ${nutritionInsights.totalLogs} meals logged this week.
+          <a href="${BASE_URL}/login?redirect=/app/health" style="color:#2563eb">View full health tracker →</a>
+        </p>
+      </div>`
+  } else {
+    nutritionSection = `
+      <div style="margin-top:24px;border-top:1px solid #e5e7eb;padding-top:20px">
+        <p style="color:#111827;font-weight:600;margin:0 0 8px">📊 Nutrition tracking</p>
+        <p style="color:#6b7280;font-size:13px;margin:0">No meals logged this week yet. Start logging meals in the Health tracker to see your weekly nutrition summary here.</p>
+        <a href="${BASE_URL}/login?redirect=/app/health" style="display:inline-block;margin-top:10px;color:#2563eb;font-size:13px">Start tracking →</a>
+      </div>`
+  }
+
+  return buildEmailWrapper(name, expirySection + recipeSection + tipSection + nutritionSection, [
+    `<a href="${BASE_URL}/login?redirect=/app/mealplan" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;margin-right:8px">Open meal plan →</a>`,
+    `<a href="${BASE_URL}/login?redirect=/app/health" style="display:inline-block;background:#f3f4f6;color:#374151;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">Health tracker →</a>`,
   ], unsubscribeToken)
 }
 
@@ -230,13 +312,16 @@ const sendWeeklyDigest = async () => {
 
       let html, subject
 
-      if (familyPlan === 'premium') {
+if (familyPlan === 'premium') {
         const pantryItems = await prisma.pantryItem.findMany({
           where: { familyId: family.id, quantity: { gt: 0 } },
           take: 20,
         })
-        const recipes = await getRecipeSuggestions(pantryItems, familyPlan)
-        html = buildPremiumEmail(firstName, expiringItems, recipes, token)
+        const [recipes, nutritionInsights] = await Promise.all([
+          getRecipeSuggestions(pantryItems, familyPlan),
+          getNutritionInsights(family.id),
+        ])
+        html = buildPremiumEmail(firstName, expiringItems, recipes, nutritionInsights, token)
         subject = `Your weekly Nooka digest — ${expiringItems.length > 0 ? `${expiringItems.length} items expiring` : 'all good this week'} 🍽️`
 
       } else if (familyPlan === 'family') {
