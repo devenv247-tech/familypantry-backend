@@ -12,6 +12,7 @@ const {
 } = require('../controllers/healthTrackerController')
 const {
   lookupNutrition,
+  calculateIngredients,
   getCacheStats,
   deleteCacheItem,
   clearExpiredCache,
@@ -26,6 +27,7 @@ router.post('/meal', auth, logMeal)
 router.put('/goal', auth, updateMemberGoal)
 router.delete('/log/:id', auth, deleteNutritionLog)
 router.post('/lookup', auth, lookupNutrition)
+router.post('/calculate-ingredients', auth, calculateIngredients)
 router.get('/nutrition/search', auth, searchNutritionCache)
 
 // Kids nutrition mode

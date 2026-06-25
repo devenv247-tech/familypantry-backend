@@ -185,6 +185,68 @@ calcium is in mg, iron is in mg, vitaminD is in IU. Estimate based on ingredient
   }
 }
 
+// Calculate macros from a list of ingredients
+exports.calculateIngredients = async (req, res) => {
+  try {
+    const { ingredients } = req.body
+    if (!ingredients || !Array.isArray(ingredients) || ingredients.length === 0) {
+      return res.status(400).json({ error: 'Ingredients array required' })
+    }
+
+    const ingredientList = ingredients
+      .filter(i => i.name && i.quantity)
+      .map(i => `- ${i.quantity} ${i.unit || 'g'} ${i.name}`)
+      .join('\n')
+
+    if (!ingredientList) {
+      return res.status(400).json({ error: 'No valid ingredients provided' })
+    }
+
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+    const message = await callClaude(anthropic, {
+      model: 'claude-sonnet-4-6',
+      max_tokens: 500,
+      system: 'You are a JSON API. Respond ONLY with raw JSON. No markdown, no backticks, no explanation. Start with { and end with }.',
+      messages: [{
+        role: 'user',
+        content: `Calculate the total combined nutrition for this home-cooked meal using these ingredients:
+
+${ingredientList}
+
+Sum up all ingredients and return the total nutrition for the entire dish as prepared.
+Use standard Canadian nutrition data. Be accurate — this is for health tracking.
+
+Respond ONLY with valid JSON:
+{
+  "found": true,
+  "mealName": "Custom home-cooked meal",
+  "servingSize": "full recipe",
+  "calories": 850,
+  "protein": 45,
+  "carbs": 80,
+  "fat": 30,
+  "fiber": 8,
+  "sugar": 6,
+  "sodium": 1200,
+  "calcium": 150,
+  "iron": 4.2,
+  "vitaminD": 20,
+  "confidence": "medium",
+  "source": "calculated from ingredients"
+}`
+      }]
+    }, 'ingredient_calculator')
+
+    let text = message.content[0].text.trim()
+    text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+    const nutrition = JSON.parse(text)
+
+    res.json(nutrition)
+  } catch (err) {
+    return handleAnthropicError(err, res)
+  }
+}
 // Get cache stats for admin
 exports.getCacheStats = async (req, res) => {
   try {
