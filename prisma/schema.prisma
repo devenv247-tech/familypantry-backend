@@ -258,6 +258,9 @@ model NutritionCache {
   fiber       Float?
   sugar       Float?
   sodium      Float?
+  calcium     Float?
+  iron        Float?
+  vitaminD    Float?
   servingSize String?
   source      String?
   confidence  String?
