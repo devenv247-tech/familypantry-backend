@@ -30,13 +30,12 @@ model Family {
   nutritionLogs        NutritionLog[]
   priceHistory         PriceHistory[]
   savedRecipes         SavedRecipe[]
-  dailySuggestions     DailySuggestion[]
+  dailySuggestions        DailySuggestion[]
   restockThresholdPercent Int @default(20)
   digestEnabled           Boolean @default(true)
   unsubscribeToken        String?
   reengagementSentAt      DateTime?
   activationEmailSentAt   DateTime?
-  dailySuggestions      DailySuggestion[]
 }
 
 model User {
