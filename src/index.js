@@ -194,6 +194,8 @@ app.listen(PORT, () => {
   console.log(`Nooka API running on port ${PORT}`)
   const { scheduleDigest } = require('./jobs/weeklyDigest')
   scheduleDigest()
+  const { scheduleActivationEmail } = require('./jobs/activationEmail')
+  scheduleActivationEmail()
 })
 
 // Clean up expired tokens from denylist every 24 hours
