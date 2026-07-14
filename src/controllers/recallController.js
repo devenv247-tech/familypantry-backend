@@ -25,7 +25,7 @@ exports.getRecalls = async (req, res) => {
     if (family.plan === 'free') {
       return res.status(403).json({
         error: 'Family plan feature',
-        message: 'Health Canada recall alerts are available on the Family plan ($7/mo).',
+        message: 'Health Canada recall alerts are available on the Family plan ($9.99/mo).',
         limitReached: true
       })
     }
@@ -57,7 +57,7 @@ exports.checkPantryMatches = async (req, res) => {
     if (family.plan === 'free') {
       return res.status(403).json({
         error: 'Family plan feature',
-        message: 'Pantry recall matching is available on the Family plan ($7/mo).',
+        message: 'Pantry recall matching is available on the Family plan ($9.99/mo).',
         limitReached: true
       })
     }
@@ -125,7 +125,7 @@ exports.getTodaysRecalls = async (req, res) => {
     if (family.plan === 'free') {
       return res.status(403).json({
         error: 'Family plan feature',
-        message: 'Recall alerts are available on the Family plan ($7/mo).',
+        message: 'Recall alerts are available on the Family plan ($9.99/mo).',
         limitReached: true
       })
     }

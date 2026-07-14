@@ -57,7 +57,7 @@ exports.scanPantryPhoto = async (req, res) => {
     if (limit === 0) {
       return res.status(403).json({
         error: 'Family plan feature',
-        message: 'AI photo scan is available on the Family plan ($7/mo).',
+        message: 'AI photo scan is available on the Family plan ($9.99/mo).',
         limitReached: true
       })
     }
