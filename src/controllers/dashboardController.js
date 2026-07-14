@@ -146,6 +146,23 @@ function formatTimeAgo(date) {
   return `${days} day${days > 1 ? 's' : ''} ago`
 }
 
+// All timezone math uses America/Vancouver intentionally — matches cron jobs; per-family tz is a future concern.
+const vanDow = (d) => {
+  const name = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Vancouver', weekday: 'short' }).format(d)
+  return { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 }[name]
+}
+
+const vanWeekStart = (now) => {
+  const mondayUtc = new Date(now)
+  mondayUtc.setUTCDate(mondayUtc.getUTCDate() - vanDow(now))
+  const dateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Vancouver' }).format(mondayUtc)
+  const noonUtc = new Date(dateStr + 'T12:00:00Z')
+  const vanHour = parseInt(
+    new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Vancouver', hour: '2-digit', hour12: false }).format(noonUtc)
+  )
+  return new Date(dateStr + 'T00:00:00Z').getTime() + (12 - vanHour) * 3600000
+}
+
 exports.getWasteSavings = async (req, res) => {
   try {
     const familyId = req.user.familyId
@@ -164,6 +181,20 @@ exports.getWasteSavings = async (req, res) => {
     ])
 
     const totalMealsCooked = cookedFromPlan.length + cookedFromRecipes.length
+
+    const weekStartMs = vanWeekStart(now)
+    const weekPlan    = cookedFromPlan.filter(m => new Date(m.cookedAt).getTime() >= weekStartMs)
+    const weekRecipes = cookedFromRecipes.filter(m => new Date(m.cookedAt).getTime() >= weekStartMs)
+    const mealsCookedThisWeek = weekPlan.length + weekRecipes.length
+
+    const cookedDaysSet = new Set()
+    ;[...weekPlan, ...weekRecipes].forEach(m => cookedDaysSet.add(vanDow(new Date(m.cookedAt))))
+    const cookedDays = Array.from(cookedDaysSet).sort((a, b) => a - b)
+
+    const allCooked = [...cookedFromPlan, ...cookedFromRecipes].map(m => m.cookedAt).filter(Boolean)
+    const lastCookedAt = allCooked.length
+      ? new Date(Math.max(...allCooked.map(d => new Date(d).getTime())))
+      : null
 
     // Food rescued — pantry items removed before expiry
     // ItemUsageHistory tracks items removed; if removedAt < actualExpiry = rescued
@@ -200,6 +231,9 @@ exports.getWasteSavings = async (req, res) => {
       foodRescued,
       wasteAvoided,
       period: 'this month',
+      mealsCookedThisWeek,
+      cookedDays,
+      lastCookedAt,
     })
   } catch (err) {
     console.error('getWasteSavings error:', err)
