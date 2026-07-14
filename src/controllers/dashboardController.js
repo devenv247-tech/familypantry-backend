@@ -1,5 +1,16 @@
+const Anthropic = require('@anthropic-ai/sdk')
+const { trackApiUsage } = require('../utils/anthropicError')
+const { filterUsable } = require('../utils/pantryFilters')
 const prisma = require('../utils/prisma')
 // CO2 calculations use fixed averages per meal — no item-level lookup needed
+
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+const callClaude = async (params, endpoint) => {
+  const message = await anthropic.messages.create(params)
+  await trackApiUsage(endpoint, message.usage?.input_tokens || 0, message.usage?.output_tokens || 0, params.model)
+  return message
+}
 
 exports.getStats = async (req, res) => {
   try {
@@ -193,6 +204,50 @@ exports.getWasteSavings = async (req, res) => {
   } catch (err) {
     console.error('getWasteSavings error:', err)
     res.status(500).json({ error: 'Failed to fetch waste savings' })
+  }
+}
+
+exports.getTonightSuggestion = async (req, res) => {
+  try {
+    const familyId = req.user.familyId
+    const today = new Date().toISOString().split('T')[0]
+
+    const cached = await prisma.dailySuggestion.findUnique({
+      where: { familyId_date: { familyId, date: today } }
+    })
+    if (cached) return res.json({ recipe: cached.recipe })
+
+    const rawPantry = await prisma.pantryItem.findMany({ where: { familyId } })
+    const usable = filterUsable(rawPantry)
+
+    if (usable.length < 3) return res.json({ empty: true })
+
+    const pantryList = usable.map(i => `${i.name} (${i.quantity} ${i.unit})`).join(', ')
+
+    const message = await callClaude({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 400,
+      system: 'You are a recipe API. You MUST respond with only a valid raw JSON object. No markdown, no backticks, no explanation. Start with { and end with }.',
+      messages: [{
+        role: 'user',
+        content: `Pantry items available: ${pantryList}\n\nSuggest ONE simple weeknight dinner recipe using only these pantry items. Keep it under 45 minutes.\n\nRespond with only this JSON:\n{\n  "name": "Recipe name",\n  "time": "30 mins",\n  "difficulty": "Easy",\n  "icon": "🍽️",\n  "ingredients": [{"name": "item", "quantity": 2, "unit": "pcs"}]\n}`
+      }]
+    }, 'daily_suggestion')
+
+    let text = message.content[0].text.trim()
+    text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+    const recipe = JSON.parse(text)
+
+    await prisma.dailySuggestion.upsert({
+      where: { familyId_date: { familyId, date: today } },
+      create: { familyId, date: today, recipe },
+      update: {}
+    })
+
+    res.json({ recipe })
+  } catch (err) {
+    console.error('getTonightSuggestion error:', err?.message || err)
+    res.json({ empty: true })
   }
 }
 

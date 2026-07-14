@@ -6,7 +6,7 @@ const { getSeasonalContext } = require('../utils/seasons')
 
 const callClaude = async (anthropic, params, endpoint) => {
   const message = await anthropic.messages.create(params)
-  await trackApiUsage(endpoint, message.usage?.input_tokens || 0, message.usage?.output_tokens || 0)
+  await trackApiUsage(endpoint, message.usage?.input_tokens || 0, message.usage?.output_tokens || 0, params.model)
   return message
 }
 

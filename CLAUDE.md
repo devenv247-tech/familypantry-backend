@@ -26,6 +26,7 @@ Never commit `.env`, `.env.production`, or `.claude/`.
 - **NEVER run `prisma migrate dev`** — it fails against the Supabase connection pooler.
 - Schema changes: write the SQL (`ALTER TABLE` / `CREATE TABLE`) for me to run manually in the **Supabase SQL Editor**, update `schema.prisma` to match, then remind me to run `npx prisma generate` locally. Wait for my confirmation before writing code that depends on the new schema.
 - All queries scoped by `familyId` — every endpoint must enforce family scoping via the existing auth middleware. Never trust client-provided family/user IDs.
+- **New tables: always enable RLS** — include `ALTER TABLE "TableName" ENABLE ROW LEVEL SECURITY;` in every CREATE TABLE script you give me. RLS with no policies locks the Supabase REST API side door; Prisma connects as postgres and is unaffected.
 
 ## Claude API conventions (critical)
 - Model for main features: `claude-sonnet-4-6`. Cheap/ambient calls (pre-checks, cached daily suggestions): use haiku.

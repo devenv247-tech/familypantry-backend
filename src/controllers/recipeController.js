@@ -8,6 +8,7 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 })
 const { estimateRecipeCost } = require('../utils/recipeCost')
+const { filterUsable } = require('../utils/pantryFilters')
 
 const getWeekKey = () => {
   const now = new Date()
@@ -19,7 +20,7 @@ const getWeekKey = () => {
 
 const callClaude = async (anthropic, params, endpoint) => {
   const message = await anthropic.messages.create(params)
-  await trackApiUsage(endpoint, message.usage?.input_tokens || 0, message.usage?.output_tokens || 0)
+  await trackApiUsage(endpoint, message.usage?.input_tokens || 0, message.usage?.output_tokens || 0, params.model)
   return message
 }
 
@@ -89,15 +90,10 @@ exports.suggestRecipes = async (req, res) => {
     }
 
     // ── 1. Get pantry — exclude expired and zero/negative quantity ────────────
-    const today = new Date()
     const rawPantry = await prisma.pantryItem.findMany({
       where: { familyId: req.user.familyId },
     })
-    const pantryItems = rawPantry.filter(i => {
-      if (i.quantity <= 0) return false
-      if (i.expiry && new Date(i.expiry) < today) return false
-      return true
-    })
+    const pantryItems = filterUsable(rawPantry)
 
     // ── 2. Get items currently on grocery list (user knows they need more) ────
     const groceryItems = await prisma.groceryItem.findMany({

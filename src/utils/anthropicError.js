@@ -1,12 +1,14 @@
 const prisma = require('./prisma')
 
 // Track every Claude API call — tokens used, cost, endpoint
-const trackApiUsage = async (endpoint, inputTokens, outputTokens) => {
+const trackApiUsage = async (endpoint, inputTokens, outputTokens, model) => {
   try {
-    // Cost per million tokens (Claude Sonnet 4)
-    const inputCostPer1M = 3.00
-    const outputCostPer1M = 15.00
-    const cost = ((inputTokens / 1_000_000) * inputCostPer1M) + ((outputTokens / 1_000_000) * outputCostPer1M)
+    const PRICING = [
+      { prefix: 'claude-haiku-4-5', input: 1.00, output:  5.00 },
+      { prefix: 'claude-sonnet-4',  input: 3.00, output: 15.00 },
+    ]
+    const rates = PRICING.find(p => model?.startsWith(p.prefix)) ?? { input: 3.00, output: 15.00 }
+    const cost = ((inputTokens / 1_000_000) * rates.input) + ((outputTokens / 1_000_000) * rates.output)
 
     // Store in FeatureFlag description as a running log (simple approach)
     const existing = await prisma.featureFlag.findUnique({ where: { name: 'ai_recipes' } })

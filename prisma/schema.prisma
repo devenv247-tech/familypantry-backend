@@ -30,11 +30,13 @@ model Family {
   nutritionLogs        NutritionLog[]
   priceHistory         PriceHistory[]
   savedRecipes         SavedRecipe[]
+  dailySuggestions     DailySuggestion[]
   restockThresholdPercent Int @default(20)
   digestEnabled           Boolean @default(true)
   unsubscribeToken        String?
   reengagementSentAt      DateTime?
   activationEmailSentAt   DateTime?
+  dailySuggestions      DailySuggestion[]
 }
 
 model User {
@@ -311,4 +313,15 @@ model GrowthLog {
   heightUnit String   @default("cm")
   note       String?
   loggedAt   DateTime @default(now())
+}
+
+model DailySuggestion {
+  id        String   @id @default(cuid())
+  familyId  String
+  family    Family   @relation(fields: [familyId], references: [id])
+  date      String
+  recipe    Json
+  createdAt DateTime @default(now())
+
+  @@unique([familyId, date])
 }
