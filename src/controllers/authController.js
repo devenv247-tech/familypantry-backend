@@ -42,7 +42,7 @@ exports.register = async (req, res) => {
     const token = generateToken({ userId: user.id, familyId: family.id, email })
     res.status(201).json({
       token,
-      user: { id: user.id, name: user.name, email: user.email },
+      user: { id: user.id, name: user.name, email: user.email, role: user.role },
       family: { id: family.id, name: family.name, plan: family.plan },
     })
   } catch (err) {
@@ -115,7 +115,7 @@ exports.login = async (req, res) => {
     const token = generateToken({ userId: user.id, familyId: user.familyId, email })
     res.json({
       token,
-      user: { id: user.id, name: user.name, email: user.email, isAdmin: user.isAdmin ?? false },
+      user: { id: user.id, name: user.name, email: user.email, role: user.role, isAdmin: user.isAdmin ?? false },
       family: { id: user.family.id, name: user.family.name, plan: user.family.plan },
     })
   } catch (err) {
