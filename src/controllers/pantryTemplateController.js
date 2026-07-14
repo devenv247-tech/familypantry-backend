@@ -22,16 +22,6 @@ exports.applyTemplate = async (req, res) => {
     const { templateId } = req.body
     const familyId = req.user.familyId
 
-    // Check plan
-    const family = await prisma.family.findUnique({ where: { id: familyId } })
-    if (family.plan === 'free') {
-      return res.status(403).json({
-        error: 'Family plan feature',
-        message: 'Pantry templates are available on the Family plan ($7/mo).',
-        limitReached: true
-      })
-    }
-
     const template = PANTRY_TEMPLATES[templateId]
     if (!template) {
       return res.status(404).json({ error: 'Template not found' })
