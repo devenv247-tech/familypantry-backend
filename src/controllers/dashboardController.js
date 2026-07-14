@@ -226,11 +226,11 @@ exports.getTonightSuggestion = async (req, res) => {
 
     const message = await callClaude({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 400,
+      max_tokens: 600,
       system: 'You are a recipe API. You MUST respond with only a valid raw JSON object. No markdown, no backticks, no explanation. Start with { and end with }.',
       messages: [{
         role: 'user',
-        content: `Pantry items available: ${pantryList}\n\nSuggest ONE simple weeknight dinner recipe using only these pantry items. Keep it under 45 minutes.\n\nRespond with only this JSON:\n{\n  "name": "Recipe name",\n  "time": "30 mins",\n  "difficulty": "Easy",\n  "icon": "🍽️",\n  "ingredients": [{"name": "item", "quantity": 2, "unit": "pcs"}]\n}`
+        content: `Pantry items available: ${pantryList}\n\nSuggest ONE simple weeknight dinner recipe using only these pantry items. Keep it under 45 minutes.\n\nRespond with only this JSON (steps: 4–6 concise cooking steps):\n{\n  "name": "Recipe name",\n  "time": "30 mins",\n  "difficulty": "Easy",\n  "icon": "🍽️",\n  "ingredients": [{"name": "item", "quantity": 2, "unit": "pcs"}],\n  "steps": ["Step 1.", "Step 2."]\n}`
       }]
     }, 'daily_suggestion')
 
