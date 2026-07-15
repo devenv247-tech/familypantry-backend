@@ -20,6 +20,17 @@ const UNIT_CANONICAL = {
   gallon: 'gallon', gallons: 'gallon',
 }
 
+// Exact dimensional conversions — [recipeCanon][pantryCanon] = multiply factor
+// Covers same-dimension pairs only; volume↔weight (cups↔g etc.) stays skipped
+const UNIT_CONVERSIONS = {
+  g:  { kg: 1 / 1000 },
+  kg: { g: 1000 },
+  ml: { L: 1 / 1000 },
+  L:  { ml: 1000 },
+  oz: { lb: 1 / 16 },
+  lb: { oz: 16 },
+}
+
 const getCanonicalUnit = (unit) => {
   const u = (unit || '').toLowerCase().trim()
   if (!u || COUNT_UNITS.includes(u)) return 'count'
@@ -182,15 +193,16 @@ exports.subtractIngredients = async (req, res) => {
         continue
       }
 
-      // Skip if units don't share the same canonical — avoids wrong cross-unit math (e.g. tbsp vs ml)
       const ingCanon = getCanonicalUnit(ing.unit)
       const itemCanon = getCanonicalUnit(item.unit)
-      if (ingCanon !== itemCanon) {
+      // Same-dimension unit pairs (g↔kg, ml↔L, oz↔lb) get converted; everything else skips
+      const convFactor = ingCanon !== itemCanon ? UNIT_CONVERSIONS[ingCanon]?.[itemCanon] : 1
+      if (convFactor === undefined) {
         results.push({ name: ingName, updated: false, reason: 'unit_mismatch', recipeUnit: ing.unit || '', pantryUnit: item.unit })
         continue
       }
 
-      const subtractAmt = parseFloat(ing.quantity) || 0
+      const subtractAmt = (parseFloat(ing.quantity) || 0) * convFactor
       const newQty = Math.max(0, item.quantity - subtractAmt)
       const normalized = normalizeUnit(newQty, item.unit)
 
