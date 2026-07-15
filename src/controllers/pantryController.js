@@ -140,21 +140,36 @@ exports.subtractIngredients = async (req, res) => {
     const { ingredients } = req.body
     const results = []
 
+    // Fetch all family pantry items once — matching done in memory below
+    const allPantryItems = await prisma.pantryItem.findMany({
+      where: { familyId: req.user.familyId },
+      orderBy: { name: 'asc' },
+    })
+
     for (const ing of ingredients) {
       const ingName = (ing.name || '').trim()
       if (!ingName) continue
 
-      // Exact match first (case-insensitive, deterministic)
-      let item = await prisma.pantryItem.findFirst({
-        where: { familyId: req.user.familyId, name: { equals: ingName, mode: 'insensitive' } },
-        orderBy: { name: 'asc' },
-      })
+      // Strip parenthetical suffixes: "Besan (chickpea flour)" → "Besan"
+      const strippedName = ingName.replace(/\s*\(.*\)\s*$/, '').trim() || ingName
 
-      // Contains fallback — shortest matching name wins to avoid "butter" → "peanut butter"
+      // 1. Exact match — try original, then stripped
+      let item = allPantryItems.find(i => i.name.toLowerCase() === ingName.toLowerCase())
+      if (!item && strippedName !== ingName) {
+        item = allPantryItems.find(i => i.name.toLowerCase() === strippedName.toLowerCase())
+      }
+
+      // 2. Both-direction contains — shortest match wins
+      // Guard: pantry name must be ≥3 chars for either direction;
+      // reverse direction (recipe contains pantry) additionally requires ≥4 chars or a space
       if (!item) {
-        const candidates = await prisma.pantryItem.findMany({
-          where: { familyId: req.user.familyId, name: { contains: ingName, mode: 'insensitive' } },
-          orderBy: { name: 'asc' },
+        const nameLower = strippedName.toLowerCase()
+        const candidates = allPantryItems.filter(i => {
+          const pLower = i.name.toLowerCase()
+          if (pLower.length < 3) return false
+          if (pLower.includes(nameLower)) return true
+          if (nameLower.includes(pLower)) return pLower.length >= 4 || pLower.includes(' ')
+          return false
         })
         if (candidates.length > 0) {
           candidates.sort((a, b) => a.name.length - b.name.length)

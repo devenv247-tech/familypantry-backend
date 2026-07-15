@@ -264,7 +264,7 @@ exports.getTonightSuggestion = async (req, res) => {
       system: 'You are a recipe API. You MUST respond with only a valid raw JSON object. No markdown, no backticks, no explanation. Start with { and end with }.',
       messages: [{
         role: 'user',
-        content: `Pantry items available: ${pantryList}\n\nSuggest ONE simple weeknight dinner recipe using only these pantry items. Keep it under 45 minutes.\n\nRespond with only this JSON (steps: 4–6 concise cooking steps):\n{\n  "name": "Recipe name",\n  "time": "30 mins",\n  "difficulty": "Easy",\n  "icon": "🍽️",\n  "ingredients": [{"name": "item", "quantity": 2, "unit": "pcs"}],\n  "steps": ["Step 1.", "Step 2."]\n}`
+        content: `Pantry items available: ${pantryList}\n\nSuggest ONE simple weeknight dinner recipe using only these pantry items. Keep it under 45 minutes.\n\nUNIT RULE: For each ingredient, output the quantity and unit exactly as shown in the pantry list above. EXCEPTION: items tracked in a container unit (bottle, can, pcs, jar, pack, bag, box) where only a small amount is used (oils, condiments, sauces) → use the natural cooking unit (tsp/tbsp/ml/g) instead.\n\nRespond with only this JSON (steps: 4–6 concise cooking steps):\n{\n  "name": "Recipe name",\n  "time": "30 mins",\n  "difficulty": "Easy",\n  "icon": "🍽️",\n  "ingredients": [{"name": "item", "quantity": 2, "unit": "pcs"}],\n  "steps": ["Step 1.", "Step 2."]\n}`
       }]
     }, 'daily_suggestion')
 

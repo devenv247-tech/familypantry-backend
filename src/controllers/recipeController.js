@@ -207,6 +207,10 @@ MISSING INGREDIENT RULES - MUST FOLLOW:
 5. Sort the 3 recipes by missing ingredient count ascending (fewest first)
 6. If a pantry item is marked LOW STOCK, prefer not to use it as the main ingredient
 
+UNIT RULES - MUST FOLLOW:
+1. For pantry-sourced ingredients, output the quantity and unit in the EXACT same unit shown in the pantry list above (e.g. pantry shows "Turmeric (50 g)" → output unit "g", not "tsp")
+2. EXCEPTION: if a pantry item is tracked in a container unit (pcs, bottle, can, jar, pack, bag, box) and the recipe only uses a small amount (an oil, sauce, or condiment), keep the natural cooking unit (tsp/tbsp/cup/ml/g) — those will not be auto-deducted, which is correct
+
 Please suggest exactly 3 recipes. For each recipe provide:
 - Name
 - Description (1-2 sentences)
