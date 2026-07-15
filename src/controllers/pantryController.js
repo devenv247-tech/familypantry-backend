@@ -1,7 +1,30 @@
 const prisma = require('../utils/prisma')
 const Anthropic = require('@anthropic-ai/sdk')
-const { normalizeUnit, detectIsSpice, getStockPercent } = require('../utils/normalizeUnit')
+const { normalizeUnit, detectIsSpice, getStockPercent, COUNT_UNITS } = require('../utils/normalizeUnit')
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+const UNIT_CANONICAL = {
+  g: 'g', gram: 'g', grams: 'g',
+  kg: 'kg', kilogram: 'kg', kilograms: 'kg',
+  lb: 'lb', lbs: 'lb', pound: 'lb', pounds: 'lb',
+  oz: 'oz', ounce: 'oz', ounces: 'oz',
+  mg: 'mg', milligram: 'mg', milligrams: 'mg',
+  ml: 'ml', milliliter: 'ml', milliliters: 'ml', millilitre: 'ml', millilitres: 'ml',
+  l: 'L', L: 'L', liter: 'L', liters: 'L', litre: 'L', litres: 'L',
+  tsp: 'tsp', teaspoon: 'tsp', teaspoons: 'tsp',
+  tbsp: 'tbsp', tablespoon: 'tbsp', tablespoons: 'tbsp',
+  cup: 'cup', cups: 'cup',
+  floz: 'floz', 'fl oz': 'floz',
+  pint: 'pint', pints: 'pint',
+  quart: 'quart', quarts: 'quart',
+  gallon: 'gallon', gallons: 'gallon',
+}
+
+const getCanonicalUnit = (unit) => {
+  const u = (unit || '').toLowerCase().trim()
+  if (!u || COUNT_UNITS.includes(u)) return 'count'
+  return UNIT_CANONICAL[u] || u
+}
 
 exports.getItems = async (req, res) => {
   try {
@@ -116,39 +139,82 @@ exports.subtractIngredients = async (req, res) => {
   try {
     const { ingredients } = req.body
     const results = []
+
     for (const ing of ingredients) {
-      const item = await prisma.pantryItem.findFirst({
-        where: {
-          familyId: req.user.familyId,
-          name: { contains: ing.name, mode: 'insensitive' }
-        }
+      const ingName = (ing.name || '').trim()
+      if (!ingName) continue
+
+      // Exact match first (case-insensitive, deterministic)
+      let item = await prisma.pantryItem.findFirst({
+        where: { familyId: req.user.familyId, name: { equals: ingName, mode: 'insensitive' } },
+        orderBy: { name: 'asc' },
       })
-      if (item) {
-        const subtractAmt = parseFloat(ing.quantity) || 0
-        const newQty = Math.max(0, item.quantity - subtractAmt)
-        const normalized = normalizeUnit(newQty, item.unit)
 
-        // Update maxQuantity if somehow not set yet
-        const prevNormalized = normalizeUnit(item.quantity, item.unit)
-        let newMax = item.maxQuantity
-        if (!newMax && prevNormalized?.normalizedQty) {
-          newMax = prevNormalized.normalizedQty
-        }
-
-        const updated = await prisma.pantryItem.update({
-          where: { id: item.id },
-          data: {
-            quantity: newQty,
-            normalizedQty: normalized?.normalizedQty ?? item.normalizedQty,
-            maxQuantity: newMax,
-            lastUsedAt: new Date(),
-          }
+      // Contains fallback — shortest matching name wins to avoid "butter" → "peanut butter"
+      if (!item) {
+        const candidates = await prisma.pantryItem.findMany({
+          where: { familyId: req.user.familyId, name: { contains: ingName, mode: 'insensitive' } },
+          orderBy: { name: 'asc' },
         })
-        results.push({ name: ing.name, updated: true, remaining: newQty, unit: updated.unit })
-      } else {
-        results.push({ name: ing.name, updated: false, reason: 'Not found in pantry' })
+        if (candidates.length > 0) {
+          candidates.sort((a, b) => a.name.length - b.name.length)
+          item = candidates[0]
+        }
       }
+
+      if (!item) {
+        results.push({ name: ingName, updated: false, reason: 'not_found' })
+        continue
+      }
+
+      // Skip if units don't share the same canonical — avoids wrong cross-unit math (e.g. tbsp vs ml)
+      const ingCanon = getCanonicalUnit(ing.unit)
+      const itemCanon = getCanonicalUnit(item.unit)
+      if (ingCanon !== itemCanon) {
+        results.push({ name: ingName, updated: false, reason: 'unit_mismatch', recipeUnit: ing.unit || '', pantryUnit: item.unit })
+        continue
+      }
+
+      const subtractAmt = parseFloat(ing.quantity) || 0
+      const newQty = Math.max(0, item.quantity - subtractAmt)
+      const normalized = normalizeUnit(newQty, item.unit)
+
+      let newMax = item.maxQuantity
+      if (!newMax) {
+        const prevNorm = normalizeUnit(item.quantity, item.unit)
+        if (prevNorm?.normalizedQty) newMax = prevNorm.normalizedQty
+      }
+
+      const updated = await prisma.pantryItem.update({
+        where: { id: item.id },
+        data: {
+          quantity: newQty,
+          normalizedQty: normalized?.normalizedQty ?? item.normalizedQty,
+          maxQuantity: newMax,
+          lastUsedAt: new Date(),
+        },
+      })
+
+      // Record in usage history so cooking counts toward waste-savings stats
+      try {
+        await prisma.itemUsageHistory.create({
+          data: {
+            itemName: item.name,
+            category: item.category,
+            predictedExpiry: null,
+            actualExpiry: item.expiry || null,
+            removalReason: 'cooked',
+            removedAt: new Date(),
+            familyId: req.user.familyId,
+          },
+        })
+      } catch (histErr) {
+        console.error('ItemUsageHistory write failed (non-fatal):', histErr.message)
+      }
+
+      results.push({ name: ingName, updated: true, remaining: newQty, unit: updated.unit, matchedItem: item.name })
     }
+
     res.json({ success: true, results })
   } catch (err) {
     console.error(err)

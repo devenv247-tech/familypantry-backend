@@ -94,4 +94,4 @@ const getStockPercent = (normalizedQty, maxQuantity) => {
   return parseFloat(((normalizedQty / maxQuantity) * 100).toFixed(1))
 }
 
-module.exports = { normalizeUnit, detectIsSpice, getStockPercent }
+module.exports = { normalizeUnit, detectIsSpice, getStockPercent, COUNT_UNITS }
