@@ -96,6 +96,7 @@ async function main() {
             : null
         if (!expiryDate) return null
         const daysLeft = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24))
+        if (daysLeft < 0) return null  // match real job — don't show already-expired items
         return { ...item, daysLeft }
       })
       .filter(Boolean)
