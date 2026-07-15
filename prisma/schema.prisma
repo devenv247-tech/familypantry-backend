@@ -36,6 +36,8 @@ model Family {
   unsubscribeToken        String?
   reengagementSentAt      DateTime?
   activationEmailSentAt   DateTime?
+  notifyExpiry            Boolean   @default(true)
+  expiryEmailSentAt       DateTime?
 }
 
 model User {

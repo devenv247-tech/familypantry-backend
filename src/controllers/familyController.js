@@ -141,3 +141,33 @@ exports.inviteMember = async (req, res) => {
     res.status(500).json({ error: 'Failed to send invite' })
   }
 }
+
+exports.getNotificationPrefs = async (req, res) => {
+  try {
+    const family = await prisma.family.findUnique({
+      where: { id: req.user.familyId },
+      select: { notifyExpiry: true, digestEnabled: true },
+    })
+    res.json({ notifyExpiry: family.notifyExpiry, digestEnabled: family.digestEnabled })
+  } catch (err) {
+    console.error('getNotificationPrefs error:', err)
+    res.status(500).json({ error: 'Failed to get notification preferences' })
+  }
+}
+
+exports.updateNotificationPrefs = async (req, res) => {
+  try {
+    const { notifyExpiry } = req.body
+    if (typeof notifyExpiry !== 'boolean') {
+      return res.status(400).json({ error: 'notifyExpiry must be a boolean' })
+    }
+    await prisma.family.update({
+      where: { id: req.user.familyId },
+      data: { notifyExpiry },
+    })
+    res.json({ success: true, notifyExpiry })
+  } catch (err) {
+    console.error('updateNotificationPrefs error:', err)
+    res.status(500).json({ error: 'Failed to update notification preferences' })
+  }
+}
