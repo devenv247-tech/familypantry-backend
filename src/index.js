@@ -172,6 +172,8 @@ app.use('/api/health-tracker', healthTrackerRoutes)
 app.use('/api/baby', babyRoutes)
 const digestRoutes = require('./routes/digest')
 app.use('/api', digestRoutes)
+const pushRoutes = require('./routes/push')
+app.use('/api/push', pushRoutes)
 
 app.use((err, req, res, next) => {
   // Only log full stack in development

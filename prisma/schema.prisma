@@ -61,6 +61,19 @@ model User {
   pendingEmail         String?
   emailChangeToken     String?
   emailChangeExpiry    DateTime?
+  pushTokens           PushToken[]
+}
+
+model PushToken {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token      String   @unique
+  platform   String
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 model Member {

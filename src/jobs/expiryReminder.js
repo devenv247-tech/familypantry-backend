@@ -58,6 +58,45 @@ const buildExpiryReminderEmail = (name, items, unsubscribeToken) => {
   )
 }
 
+// ─── Push sender ─────────────────────────────────────────────────────────────
+
+const sendExpiryPush = async (familyId, items) => {
+  const tokens = await prisma.pushToken.findMany({
+    where: { user: { familyId } },
+    select: { token: true },
+  })
+  if (tokens.length === 0) return
+
+  const first = items[0]
+  const label = first.daysLeft === 0 ? 'today' : first.daysLeft === 1 ? 'tomorrow' : 'in 2 days'
+  const body = items.length === 1
+    ? `${first.name} expires ${label}.`
+    : `${first.name} and ${items.length - 1} other item${items.length - 1 !== 1 ? 's' : ''} expiring ${label}.`
+
+  const response = await fetch('https://exp.host/--/api/v2/push/send', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'Accept-Encoding': 'gzip, deflate',
+    },
+    body: JSON.stringify({
+      to: tokens.map(t => t.token),
+      title: 'Items expiring soon',
+      body,
+      data: { screen: 'Pantry' },
+      sound: 'default',
+    }),
+  })
+
+  const result = await response.json()
+  const tickets = Array.isArray(result.data) ? result.data : [result.data]
+  const errors = tickets.filter(t => t?.status === 'error')
+  if (errors.length > 0) {
+    console.error(`[expiry-reminder] Push errors for family ${familyId}:`, errors)
+  }
+}
+
 // ─── Main sender ──────────────────────────────────────────────────────────────
 
 const sendExpiryReminders = async () => {
@@ -100,6 +139,8 @@ const sendExpiryReminders = async () => {
         subject: `${firstName}, ${expiringItems.length} item${expiringItems.length !== 1 ? 's' : ''} expiring soon: ${itemSummary}`,
         html: buildExpiryReminderEmail(firstName, expiringItems, token),
       })
+
+      await sendExpiryPush(family.id, expiringItems)
 
       await prisma.family.update({
         where: { id: family.id },

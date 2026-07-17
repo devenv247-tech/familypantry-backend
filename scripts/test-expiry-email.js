@@ -1,5 +1,6 @@
-// Usage: node scripts/test-expiry-email.js <familyId>
-// Sends the expiry reminder email to the family's admin.
+// Usage: node scripts/test-expiry-email.js <familyId> [--push]
+// Sends the expiry reminder email to the family's admin, and optionally a push
+// notification to all registered devices for that family (--push flag).
 // Bypasses the 48h expiryEmailSentAt guard and does NOT write to the DB.
 // If no items expire in 2 days, uses the 3 soonest-expiring pantry items as a preview.
 
@@ -39,8 +40,10 @@ const buildExpiryReminderEmail = (name, items, unsubscribeToken) => {
 
 async function main() {
   const familyId = process.argv[2]
+  const sendPush = process.argv.includes('--push')
+
   if (!familyId) {
-    console.error('Usage: node scripts/test-expiry-email.js <familyId>')
+    console.error('Usage: node scripts/test-expiry-email.js <familyId> [--push]')
     process.exit(1)
   }
 
@@ -119,7 +122,7 @@ async function main() {
     return
   }
 
-  console.log('\nSending...')
+  console.log(`\nSending email${sendPush ? ' + push' : ''}...`)
   const itemSummary = expiringItems.slice(0, 3).map(i => {
     const label = i.daysLeft === 0 ? 'today' : i.daysLeft === 1 ? 'tomorrow' : `${i.daysLeft} days`
     return `${i.name} (${label})`
@@ -132,7 +135,46 @@ async function main() {
     html: buildExpiryReminderEmail(firstName, expiringItems, token),
   })
 
-  console.log('✓ Expiry reminder sent. expiryEmailSentAt was NOT updated.')
+  console.log('✓ Email sent. expiryEmailSentAt was NOT updated.')
+
+  if (sendPush) {
+    const tokens = await prisma.pushToken.findMany({
+      where: { user: { familyId } },
+      select: { token: true },
+    })
+
+    if (tokens.length === 0) {
+      console.log('  Push: no registered tokens found for this family.')
+    } else {
+      console.log(`  Push: sending to ${tokens.length} device${tokens.length !== 1 ? 's' : ''}...`)
+
+      const first = expiringItems[0]
+      const label = first.daysLeft === 0 ? 'today' : first.daysLeft === 1 ? 'tomorrow' : 'in 2 days'
+      const body = expiringItems.length === 1
+        ? `${first.name} expires ${label}.`
+        : `${first.name} and ${expiringItems.length - 1} other item${expiringItems.length - 1 !== 1 ? 's' : ''} expiring ${label}.`
+
+      const response = await fetch('https://exp.host/--/api/v2/push/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Accept-Encoding': 'gzip, deflate',
+        },
+        body: JSON.stringify({
+          to: tokens.map(t => t.token),
+          title: '[TEST] Items expiring soon',
+          body,
+          data: { screen: 'Pantry' },
+          sound: 'default',
+        }),
+      })
+
+      const result = await response.json()
+      console.log('  Push tickets:', JSON.stringify(result.data, null, 2))
+    }
+  }
+
   await prisma.$disconnect()
 }
 
