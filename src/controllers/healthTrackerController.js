@@ -1,6 +1,23 @@
 const prisma = require('../utils/prisma')
 
-// Harris-Benedict formula to calculate daily calorie goal
+const ACTIVITY_MULTIPLIERS = {
+  sedentary:   1.2,
+  light:       1.375,
+  moderate:    1.55,
+  active:      1.725,
+  very_active: 1.9,
+}
+
+// Pre-activityLevel path: preserves exact existing behaviour for members with null activityLevel
+const legacyCalories = (bmr, goal) => {
+  if (goal.includes('lose weight'))                         return Math.round(bmr * 1.375 - 500)
+  if (goal.includes('gain muscle'))                         return Math.round(bmr * 1.55 + 300)
+  if (goal.includes('high protein'))                        return Math.round(bmr * 1.55)
+  if (goal.includes('diabetes') || goal.includes('heart'))  return Math.round(bmr * 1.2)
+  if (goal.includes('healthy growth'))                      return Math.round(bmr * 1.725)
+  return Math.round(bmr * 1.375)
+}
+
 const calculateDailyCalories = (member) => {
   if (!member.age || !member.weight) return null
 
@@ -29,22 +46,15 @@ const calculateDailyCalories = (member) => {
     ? (10 * weightKg) + (6.25 * heightCm) - (5 * age) + 5
     : (10 * weightKg) - (5 * age) + 5
 
-  // Activity multiplier and goal adjustment
   const goal = (member.goals || '').toLowerCase()
   let calories
 
-  if (goal.includes('lose weight')) {
-    calories = Math.round(bmr * 1.375 - 500) // Moderate activity, deficit
-  } else if (goal.includes('gain muscle')) {
-    calories = Math.round(bmr * 1.55 + 300) // Active, surplus
-  } else if (goal.includes('high protein')) {
-    calories = Math.round(bmr * 1.55)
-  } else if (goal.includes('diabetes') || goal.includes('heart')) {
-    calories = Math.round(bmr * 1.2) // Light activity, controlled
-  } else if (goal.includes('healthy growth')) {
-    calories = Math.round(bmr * 1.725) // Very active (kids)
+  if (member.activityLevel && ACTIVITY_MULTIPLIERS[member.activityLevel]) {
+    calories = Math.round(bmr * ACTIVITY_MULTIPLIERS[member.activityLevel])
+    if (goal.includes('lose weight')) calories -= 500
+    else if (goal.includes('gain muscle')) calories += 300
   } else {
-    calories = Math.round(bmr * 1.375) // Moderate activity, maintain
+    calories = legacyCalories(bmr, goal)
   }
 
   return Math.max(1200, Math.min(4000, calories)) // Clamp between 1200-4000

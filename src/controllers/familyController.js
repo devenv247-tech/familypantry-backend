@@ -2,6 +2,8 @@ const prisma = require('../utils/prisma')
 const crypto = require('crypto')
 const { sendFamilyInvite } = require('../utils/email')
 
+const ALLOWED_ACTIVITY = ['sedentary', 'light', 'moderate', 'active', 'very_active']
+
 exports.updateRestockThreshold = async (req, res) => {
   try {
     const { restockThresholdPercent } = req.body
@@ -35,7 +37,7 @@ exports.getMembers = async (req, res) => {
 
 exports.addMember = async (req, res) => {
   try {
-    const { name, age, weight, weightUnit, height, goals, dietary, allergens, isBaby, birthDate } = req.body
+    const { name, age, weight, weightUnit, height, goals, dietary, allergens, isBaby, birthDate, activityLevel } = req.body
     if (!name) return res.status(400).json({ error: 'Name is required' })
     const member = await prisma.member.create({
       data: {
@@ -51,6 +53,7 @@ exports.addMember = async (req, res) => {
         birthDate: birthDate ? new Date(birthDate) : null,
         role: 'Member',
         familyId: req.user.familyId,
+        ...(ALLOWED_ACTIVITY.includes(activityLevel) && { activityLevel }),
       }
     })
     res.status(201).json(member)
@@ -67,7 +70,7 @@ exports.updateMember = async (req, res) => {
       where: { id, familyId: req.user.familyId }
     })
     if (!existing) return res.status(404).json({ error: 'Member not found' })
-    const { name, age, weight, weightUnit, height, goals, dietary, allergens, isBaby, birthDate } = req.body
+    const { name, age, weight, weightUnit, height, goals, dietary, allergens, isBaby, birthDate, activityLevel } = req.body
     const member = await prisma.member.update({
       where: { id },
       data: {
@@ -81,6 +84,7 @@ exports.updateMember = async (req, res) => {
         allergens: allergens || null,
         isBaby: isBaby !== undefined ? !!isBaby : existing.isBaby,
         birthDate: birthDate ? new Date(birthDate) : (isBaby === false ? null : existing.birthDate),
+        ...(activityLevel !== undefined && { activityLevel: ALLOWED_ACTIVITY.includes(activityLevel) ? activityLevel : existing.activityLevel }),
       }
     })
     res.json(member)

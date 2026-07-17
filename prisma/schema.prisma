@@ -91,6 +91,7 @@ model Member {
   allergenIntroductions   AllergenIntroduction[]
   feedingLogs             FeedingLog[]
   growthLogs              GrowthLog[]
+  activityLevel    String?
   createdAt        DateTime       @default(now())
 }
 
