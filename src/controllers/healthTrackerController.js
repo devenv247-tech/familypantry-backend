@@ -38,13 +38,14 @@ const calculateDailyCalories = (member) => {
     }
   }
 
-  // BMR using Mifflin-St Jeor (more accurate than Harris-Benedict)
-  // Assuming male formula as default (we don't store gender)
+  // BMR using Mifflin-St Jeor. Female constant is -161, male (default) is +5.
   const weightKg = member.weight
   const age = member.age
+  const isFemale = member.gender === 'female'
+  const genderConstant = isFemale ? -161 : 5
   let bmr = heightCm
-    ? (10 * weightKg) + (6.25 * heightCm) - (5 * age) + 5
-    : (10 * weightKg) - (5 * age) + 5
+    ? (10 * weightKg) + (6.25 * heightCm) - (5 * age) + genderConstant
+    : (10 * weightKg) - (5 * age) + genderConstant
 
   const goal = (member.goals || '').toLowerCase()
   let calories
@@ -183,6 +184,7 @@ exports.getHealthData = async (req, res) => {
         id: member.id,
         name: member.name,
         age: member.age,
+        genderMissing: !member.gender && !member.isBaby,
         currentWeight: latestWeight,
         weightUnit: latestWeightUnit,
         goalWeight: member.goalWeight,
