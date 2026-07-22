@@ -14,6 +14,12 @@ const heightToCm = (heightStr) => {
   if (!heightStr || typeof heightStr !== 'string') return null
   const s = heightStr.trim()
 
+  // 6' (feet only, no inches)
+  const feetOnly = s.match(/^(\d+)'$/)
+  if (feetOnly) {
+    return parseInt(feetOnly[1], 10) * 30.48
+  }
+
   // 5'4" or 5'4
   const feetInches = s.match(/^(\d+)'(\d+)"?$/)
   if (feetInches) {

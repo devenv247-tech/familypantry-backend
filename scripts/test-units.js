@@ -28,6 +28,8 @@ assert('163   (bare >96 = cm already)',        heightToCm('163'),   163)
 assert("6'2\"  (feet+inches, larger)",         heightToCm('6\'2"'), 187.96)
 assert('72    (bare ≤96 = 72 total inches)',   heightToCm('72'),    182.88)
 assert('null  (missing → null)',               heightToCm(null),    null)
+assert("6'    (feet only, no inches)",         heightToCm("6'"),    182.88)
+assert("5'    (feet only, no inches)",         heightToCm("5'"),    152.4)
 
 console.log('\ntoKg')
 assert('70 kg passthrough',    toKg(70, 'kg'),   70)

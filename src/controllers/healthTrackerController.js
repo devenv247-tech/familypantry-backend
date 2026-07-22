@@ -10,15 +10,20 @@ const PLAN_RANK = { free: 0, family: 1, premium: 2 }
 function buildMemberTargets(member, weightLogsAsc = []) {
   if (!member.weight || !member.age) return null
 
+  const latestLog = weightLogsAsc[weightLogsAsc.length - 1]
+  const weightKg = latestLog
+    ? toKg(latestLog.weight, latestLog.unit) ?? toKg(member.weight, member.weightUnit)
+    : toKg(member.weight, member.weightUnit)
+
   const heightCm = heightToCm(member.height) ?? 170
   const sex = member.gender
-  const { bmr: bmrValue, confidence } = macroEngine.bmr({ weightKg: member.weight, heightCm, age: member.age, sex })
+  const { bmr: bmrValue, confidence } = macroEngine.bmr({ weightKg, heightCm, age: member.age, sex })
   const fTdee = macroEngine.formulaTdee(bmrValue, member.activityLevel)
   const effectiveTdee = member.tdeeEstimate || fTdee
   const source = member.tdeeEstimate ? 'adaptive' : 'formula'
 
   const logsKg = weightLogsAsc.map(w => ({
-    weightKg: toKg(w.weight, w.unit) ?? member.weight,
+    weightKg: toKg(w.weight, w.unit) ?? weightKg,
     loggedAt: w.loggedAt,
   }))
   const trendSeries = macroEngine.trendWeights(logsKg)
@@ -33,7 +38,7 @@ function buildMemberTargets(member, weightLogsAsc = []) {
   if (member.fitnessGoal) {
     const result = macroEngine.goalCalories({
       tdee: effectiveTdee,
-      weightKg: member.weight,
+      weightKg,
       fitnessGoal: member.fitnessGoal,
       goalRatePct: member.goalRatePct || 0,
       sex,
@@ -43,7 +48,7 @@ function buildMemberTargets(member, weightLogsAsc = []) {
     flooredRatePct = result.flooredRatePct
     macros = macroEngine.macroTargets({
       calories,
-      weightKg: member.weight,
+      weightKg,
       goalWeightKg: member.goalWeight || null,
       fitnessGoal: member.fitnessGoal,
     })
@@ -78,13 +83,14 @@ const calculateDailyCalories = (member) => {
 
   // New fitnessGoal path — fully delegated to macroEngine
   if (member.fitnessGoal) {
+    const weightKg = toKg(member.weight, member.weightUnit)
     const heightCm = heightToCm(member.height) ?? 170
     const sex = member.gender
-    const { bmr: bmrValue } = macroEngine.bmr({ weightKg: member.weight, heightCm, age: member.age, sex })
+    const { bmr: bmrValue } = macroEngine.bmr({ weightKg, heightCm, age: member.age, sex })
     const tdee = member.tdeeEstimate || macroEngine.formulaTdee(bmrValue, member.activityLevel)
     const { calories } = macroEngine.goalCalories({
       tdee,
-      weightKg: member.weight,
+      weightKg,
       fitnessGoal: member.fitnessGoal,
       goalRatePct: member.goalRatePct || 0,
       sex,
@@ -99,7 +105,7 @@ const calculateDailyCalories = (member) => {
   const heightCm = heightToCm(member.height) ?? 170
 
   // BMR using Mifflin-St Jeor. Female constant is -161, male (default) is +5.
-  const weightKg = member.weight
+  const weightKg = toKg(member.weight, member.weightUnit)
   const age = member.age
   const isFemale = member.gender === 'female'
   const genderConstant = isFemale ? -161 : 5
@@ -124,7 +130,7 @@ const getMacroTargets = (calories, goal = '', member = null) => {
   if (member && member.fitnessGoal) {
     return macroEngine.macroTargets({
       calories,
-      weightKg: member.weight,
+      weightKg: toKg(member.weight, member.weightUnit),
       goalWeightKg: member.goalWeight || null,
       fitnessGoal: member.fitnessGoal,
     })

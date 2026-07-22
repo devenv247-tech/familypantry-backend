@@ -59,15 +59,20 @@ const runFitnessRecalibration = async () => {
           select: { weight: true, unit: true, loggedAt: true },
         })
 
+        const latestLog = weightLogs[weightLogs.length - 1]
+        const weightKg = latestLog
+          ? toKg(latestLog.weight, latestLog.unit) ?? toKg(member.weight, member.weightUnit)
+          : toKg(member.weight, member.weightUnit)
+
         const logsKg = weightLogs.map(w => ({
-          weightKg: toKg(w.weight, w.unit) ?? member.weight,
+          weightKg: toKg(w.weight, w.unit) ?? weightKg,
           loggedAt: w.loggedAt,
         }))
 
         // BMR + formula TDEE for blending and clamping
         const heightCm = heightToCm(member.height) ?? 170
         const { bmr: bmrValue } = macroEngine.bmr({
-          weightKg: member.weight,
+          weightKg,
           heightCm,
           age: member.age,
           sex: member.gender,
