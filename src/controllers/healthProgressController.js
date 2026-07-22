@@ -56,11 +56,25 @@ const logNutrition = async (req, res) => {
       return res.json({ success: true, skipped: true })
     }
 
+    const familyMembers = await prisma.member.findMany({ where: { familyId }, select: { id: true, name: true } })
+    const todayStart = new Date()
+    todayStart.setHours(0, 0, 0, 0)
+    const tomorrowStart = new Date(todayStart)
+    tomorrowStart.setDate(tomorrowStart.getDate() + 1)
+
+    let logged = 0
     await Promise.all(
-      memberNames.map(memberName =>
-        prisma.nutritionLog.create({
+      memberNames.map(async memberName => {
+        const dupCheck = await prisma.nutritionLog.findFirst({
+          where: { familyId, memberName, recipeName, loggedAt: { gte: todayStart, lt: tomorrowStart } },
+        })
+        if (dupCheck) return
+
+        const member = familyMembers.find(m => m.name === memberName)
+        await prisma.nutritionLog.create({
           data: {
             memberName,
+            memberId: member?.id ?? null,
             recipeName,
             mealType,
             calories: nutritionPerServing.calories || null,
@@ -70,13 +84,14 @@ const logNutrition = async (req, res) => {
             fiber: nutritionPerServing.fiber || null,
             sugar: nutritionPerServing.sugar || null,
             sodium: nutritionPerServing.sodium || null,
-            familyId
+            familyId,
           }
         })
-      )
+        logged++
+      })
     )
 
-    res.json({ success: true, logged: memberNames.length })
+    res.json({ success: true, logged })
   } catch (err) {
     console.error('logNutrition error:', err)
     res.status(500).json({ error: 'Failed to log nutrition' })
