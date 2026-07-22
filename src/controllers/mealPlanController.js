@@ -283,7 +283,7 @@ Respond ONLY with valid JSON array, no markdown, no extra text:
     const stream = anthropic.messages.stream({
       model: 'claude-sonnet-4-6',
       max_tokens: 24000,
-      system: 'You are a meal planning API. Respond with only a valid raw JSON object. No markdown, no backticks, no explanation. Start with { and end with }.',
+      system: 'You are a meal planning API. Respond with only valid raw JSON. No markdown, no backticks, no explanation. Start with [ and end with ].',
       messages: [{ role: 'user', content: prompt }]
     })
     const message = await stream.finalMessage()
@@ -298,7 +298,21 @@ Respond ONLY with valid JSON array, no markdown, no extra text:
 
     let generatedMeals
     try {
-      generatedMeals = JSON.parse(text)
+      const parsed = JSON.parse(text)
+      if (Array.isArray(parsed)) {
+        generatedMeals = parsed
+      } else if (parsed && typeof parsed === 'object') {
+        const inner = Object.values(parsed).find(v => Array.isArray(v))
+        if (inner) {
+          generatedMeals = inner
+        } else {
+          console.error('[generateWeekPlan] parsed object has no array value:', Object.keys(parsed))
+          return res.status(502).json({ error: 'Meal plan generation returned an invalid response, please try again' })
+        }
+      } else {
+        console.error('[generateWeekPlan] unexpected parsed type:', typeof parsed)
+        return res.status(502).json({ error: 'Meal plan generation returned an invalid response, please try again' })
+      }
     } catch (parseErr) {
       console.error('[generateWeekPlan] JSON.parse failed:', parseErr.message)
       return res.status(502).json({ error: 'Meal plan generation returned an invalid response, please try again' })
