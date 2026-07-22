@@ -184,7 +184,7 @@ exports.getHealthData = async (req, res) => {
         id: member.id,
         name: member.name,
         age: member.age,
-        genderMissing: !member.gender && !member.isBaby,
+        genderMissing: !member.gender && !member.isBaby && (member.age === null || member.age >= 13),
         currentWeight: latestWeight,
         weightUnit: latestWeightUnit,
         goalWeight: member.goalWeight,
