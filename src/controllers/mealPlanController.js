@@ -360,6 +360,7 @@ Respond ONLY with valid JSON array, no markdown, no extra text:
             mealType: meal.mealType,
             recipeName: meal.recipeName || 'Unnamed meal',
             recipeData: {
+              plannedFor: targetMembers.map(m => m.name),
               icon: meal.icon,
               description: meal.description,
               ingredients: meal.ingredients || [],
@@ -405,7 +406,10 @@ exports.markCooked = async (req, res) => {
     const nutritionPerServing = existing.recipeData?.nutritionPerServing
     if (nutritionPerServing) {
       try {
-        const allMembers = (await prisma.member.findMany({ where: { familyId } })).filter(m => !m.isBaby)
+        const plannedFor = existing.recipeData?.plannedFor
+        const allMembers = plannedFor && Array.isArray(plannedFor) && plannedFor.length > 0
+          ? (await prisma.member.findMany({ where: { familyId, name: { in: plannedFor } } })).filter(m => !m.isBaby)
+          : (await prisma.member.findMany({ where: { familyId } })).filter(m => !m.isBaby)
         const todayStart = new Date()
         todayStart.setHours(0, 0, 0, 0)
         const tomorrowStart = new Date(todayStart)
