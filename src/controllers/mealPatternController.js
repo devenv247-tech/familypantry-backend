@@ -17,6 +17,71 @@ const logCookedMeal = async (req, res) => {
       }
     })
 
+    // Auto-log per-serving nutrition from SavedRecipe if available (skip silently otherwise)
+    try {
+      const savedRecipe = await prisma.savedRecipe.findFirst({
+        where: { familyId, name: { equals: recipeName, mode: 'insensitive' } },
+        select: { nutritionPerServing: true },
+      })
+
+      if (savedRecipe?.nutritionPerServing) {
+        const nutrition = savedRecipe.nutritionPerServing
+
+        // members is a comma-separated string e.g. "Alice, Bob" or "Family"
+        const memberNames = typeof members === 'string'
+          ? members.split(',').map(s => s.trim()).filter(Boolean)
+          : Array.isArray(members) ? members.map(String) : []
+
+        const allFamilyMembers = await prisma.member.findMany({
+          where: { familyId },
+          select: { id: true, name: true },
+        })
+
+        const isFamily = memberNames.length === 1 && memberNames[0].toLowerCase() === 'family'
+        const targetMembers = isFamily
+          ? allFamilyMembers.filter(m => !m.isBaby)
+          : allFamilyMembers.filter(m =>
+              memberNames.some(n => n.toLowerCase() === m.name.toLowerCase())
+            )
+
+        const todayStart = new Date()
+        todayStart.setHours(0, 0, 0, 0)
+        const tomorrowStart = new Date(todayStart)
+        tomorrowStart.setDate(tomorrowStart.getDate() + 1)
+
+        await Promise.all(targetMembers.map(async (member) => {
+          const dupCheck = await prisma.nutritionLog.findFirst({
+            where: {
+              familyId,
+              memberName: member.name,
+              recipeName,
+              loggedAt: { gte: todayStart, lt: tomorrowStart },
+            },
+          })
+          if (dupCheck) return
+
+          await prisma.nutritionLog.create({
+            data: {
+              familyId,
+              memberName: member.name,
+              memberId: member.id,
+              recipeName,
+              mealType,
+              calories: nutrition.calories ?? null,
+              protein: nutrition.protein ?? null,
+              carbs: nutrition.carbs ?? null,
+              fat: nutrition.fat ?? null,
+              fiber: nutrition.fiber ?? null,
+              sugar: nutrition.sugar ?? null,
+              sodium: nutrition.sodium ?? null,
+            },
+          })
+        }))
+      }
+    } catch (logErr) {
+      console.error('logCookedMeal auto-log error (non-fatal):', logErr?.message)
+    }
+
     res.status(201).json({ success: true, meal })
   } catch (err) {
     console.error('logCookedMeal error:', err)

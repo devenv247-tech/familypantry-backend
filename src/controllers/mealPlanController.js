@@ -360,8 +360,9 @@ Respond ONLY with valid JSON array, no markdown, no extra text:
 exports.markCooked = async (req, res) => {
   try {
     const { id } = req.params
+    const familyId = req.user.familyId
     const existing = await prisma.mealPlan.findFirst({
-      where: { id, familyId: req.user.familyId }
+      where: { id, familyId }
     })
     if (!existing) return res.status(404).json({ error: 'Meal not found' })
 
@@ -369,6 +370,50 @@ exports.markCooked = async (req, res) => {
       where: { id },
       data: { cooked: true, cookedAt: new Date() }
     })
+
+    // Auto-log per-serving nutrition for all family members (skip silently if data missing)
+    const nutritionPerServing = existing.recipeData?.nutritionPerServing
+    if (nutritionPerServing) {
+      try {
+        const allMembers = (await prisma.member.findMany({ where: { familyId } })).filter(m => !m.isBaby)
+        const todayStart = new Date()
+        todayStart.setHours(0, 0, 0, 0)
+        const tomorrowStart = new Date(todayStart)
+        tomorrowStart.setDate(tomorrowStart.getDate() + 1)
+
+        await Promise.all(allMembers.map(async (member) => {
+          const dupCheck = await prisma.nutritionLog.findFirst({
+            where: {
+              familyId,
+              memberName: member.name,
+              recipeName: existing.recipeName,
+              loggedAt: { gte: todayStart, lt: tomorrowStart },
+            },
+          })
+          if (dupCheck) return
+
+          await prisma.nutritionLog.create({
+            data: {
+              familyId,
+              memberName: member.name,
+              memberId: member.id,
+              recipeName: existing.recipeName,
+              mealType: existing.mealType,
+              calories: nutritionPerServing.calories ?? null,
+              protein: nutritionPerServing.protein ?? null,
+              carbs: nutritionPerServing.carbs ?? null,
+              fat: nutritionPerServing.fat ?? null,
+              fiber: nutritionPerServing.fiber ?? null,
+              sugar: nutritionPerServing.sugar ?? null,
+              sodium: nutritionPerServing.sodium ?? null,
+            },
+          })
+        }))
+      } catch (logErr) {
+        console.error('markCooked auto-log error (non-fatal):', logErr?.message)
+      }
+    }
+
     res.json(meal)
   } catch (err) {
     console.error('markCooked error:', err)

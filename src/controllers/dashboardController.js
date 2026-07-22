@@ -2,7 +2,10 @@ const Anthropic = require('@anthropic-ai/sdk')
 const { trackApiUsage } = require('../utils/anthropicError')
 const { filterUsable } = require('../utils/pantryFilters')
 const prisma = require('../utils/prisma')
+const { buildMemberTargets } = require('./healthTrackerController')
 // CO2 calculations use fixed averages per meal — no item-level lookup needed
+
+const PLAN_RANK = { free: 0, family: 1, premium: 2 }
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -258,13 +261,54 @@ exports.getTonightSuggestion = async (req, res) => {
 
     const pantryList = usable.map(i => `${i.name} (${i.quantity} ${i.unit})`).join(', ')
 
+    // Goal-aware fitness injection (skipped silently on any error)
+    let fitnessBlock = ''
+    try {
+      const [members, fitnessFlag, familyForFlag] = await Promise.all([
+        prisma.member.findMany({ where: { familyId } }),
+        prisma.featureFlag.findUnique({ where: { name: 'fitness_coach' } }),
+        prisma.family.findUnique({ where: { id: familyId }, select: { plan: true } }),
+      ])
+      const goalMember = members.find(m => m.fitnessGoal)
+      if (goalMember) {
+        const hasAccess = fitnessFlag && fitnessFlag.enabled &&
+          (PLAN_RANK[familyForFlag?.plan] ?? 0) >= (PLAN_RANK[fitnessFlag.requiredPlan] ?? 0)
+        if (hasAccess) {
+          const weightLogs = await prisma.weightLog.findMany({
+            where: { memberId: goalMember.id },
+            orderBy: { loggedAt: 'asc' },
+          })
+          const targets = buildMemberTargets(goalMember, weightLogs)
+          if (targets?.calories && targets?.macros?.protein) {
+            const todayStart = new Date()
+            todayStart.setHours(0, 0, 0, 0)
+            const todayLogs = await prisma.nutritionLog.findMany({
+              where: {
+                familyId,
+                memberName: goalMember.name,
+                loggedAt: { gte: todayStart },
+              },
+            })
+            const todayCalories = todayLogs.reduce((s, l) => s + (l.calories || 0), 0)
+            const todayProtein = todayLogs.reduce((s, l) => s + (l.protein || 0), 0)
+            const mealsRemaining = Math.max(1, 3 - todayLogs.length)
+            const remainingCalories = Math.max(0, targets.calories - todayCalories)
+            const remainingProtein = Math.max(0, targets.macros.protein - todayProtein)
+            fitnessBlock = `\nFITNESS GOAL: This meal should provide roughly ${Math.round(remainingCalories / mealsRemaining)} kcal and at least ${Math.round(remainingProtein / mealsRemaining)}g protein for a member on a ${goalMember.fitnessGoal} plan.\n`
+          }
+        }
+      }
+    } catch (fitnessErr) {
+      console.error('fitnessBlock compute error (non-fatal):', fitnessErr?.message)
+    }
+
     const message = await callClaude({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 600,
       system: 'You are a recipe API. You MUST respond with only a valid raw JSON object. No markdown, no backticks, no explanation. Start with { and end with }.',
       messages: [{
         role: 'user',
-        content: `Pantry items available: ${pantryList}\n\nSuggest ONE simple weeknight dinner recipe using only these pantry items. Keep it under 45 minutes.\n\nUNIT RULE: For each ingredient, output the quantity and unit exactly as shown in the pantry list above. EXCEPTION: items tracked in a container unit (bottle, can, pcs, jar, pack, bag, box) where only a small amount is used (oils, condiments, sauces) → use the natural cooking unit (tsp/tbsp/ml/g) instead.\n\nRespond with only this JSON (steps: 4–6 concise cooking steps):\n{\n  "name": "Recipe name",\n  "time": "30 mins",\n  "difficulty": "Easy",\n  "icon": "🍽️",\n  "ingredients": [{"name": "item", "quantity": 2, "unit": "pcs"}],\n  "steps": ["Step 1.", "Step 2."]\n}`
+        content: `Pantry items available: ${pantryList}\n${fitnessBlock}\nSuggest ONE simple weeknight dinner recipe using only these pantry items. Keep it under 45 minutes.\n\nUNIT RULE: For each ingredient, output the quantity and unit exactly as shown in the pantry list above. EXCEPTION: items tracked in a container unit (bottle, can, pcs, jar, pack, bag, box) where only a small amount is used (oils, condiments, sauces) → use the natural cooking unit (tsp/tbsp/ml/g) instead.\n\nRespond with only this JSON (steps: 4–6 concise cooking steps):\n{\n  "name": "Recipe name",\n  "time": "30 mins",\n  "difficulty": "Easy",\n  "icon": "🍽️",\n  "ingredients": [{"name": "item", "quantity": 2, "unit": "pcs"}],\n  "steps": ["Step 1.", "Step 2."]\n}`
       }]
     }, 'daily_suggestion')
 

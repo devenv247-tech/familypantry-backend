@@ -3,6 +3,9 @@ const { handleAnthropicError, trackApiUsage } = require('../utils/anthropicError
 const prisma = require('../utils/prisma')
 const { getMealPatternContext } = require('./mealPatternController')
 const { getSeasonalContext } = require('../utils/seasons')
+const { buildMemberTargets } = require('./healthTrackerController')
+
+const PLAN_RANK = { free: 0, family: 1, premium: 2 }
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -150,6 +153,44 @@ exports.suggestRecipes = async (req, res) => {
       const height = m.height || 'unknown'
       return `${m.name}: age=${m.age || 'unknown'}, weight=${weight}, height=${height}, health goals=${goals}, dietary restrictions=${dietary}, allergens=${allergens}`
     }).join('; ')
+
+    // Goal-aware fitness injection (skipped silently on any error)
+    let fitnessBlock = ''
+    try {
+      const goalMember = memberProfiles.find(m => m.fitnessGoal)
+      if (goalMember) {
+        const fitnessFlag = await prisma.featureFlag.findUnique({ where: { name: 'fitness_coach' } })
+        const hasAccess = fitnessFlag && fitnessFlag.enabled &&
+          (PLAN_RANK[family?.plan] ?? 0) >= (PLAN_RANK[fitnessFlag.requiredPlan] ?? 0)
+        if (hasAccess) {
+          const weightLogs = await prisma.weightLog.findMany({
+            where: { memberId: goalMember.id },
+            orderBy: { loggedAt: 'asc' },
+          })
+          const targets = buildMemberTargets(goalMember, weightLogs)
+          if (targets?.calories && targets?.macros?.protein) {
+            const todayStart = new Date()
+            todayStart.setHours(0, 0, 0, 0)
+            const todayLogs = await prisma.nutritionLog.findMany({
+              where: {
+                familyId: req.user.familyId,
+                memberName: goalMember.name,
+                loggedAt: { gte: todayStart },
+              },
+            })
+            const todayCalories = todayLogs.reduce((s, l) => s + (l.calories || 0), 0)
+            const todayProtein = todayLogs.reduce((s, l) => s + (l.protein || 0), 0)
+            const mealsRemaining = Math.max(1, 3 - todayLogs.length)
+            const remainingCalories = Math.max(0, targets.calories - todayCalories)
+            const remainingProtein = Math.max(0, targets.macros.protein - todayProtein)
+            fitnessBlock = `\nFITNESS GOAL: This meal should provide roughly ${Math.round(remainingCalories / mealsRemaining)} kcal and at least ${Math.round(remainingProtein / mealsRemaining)}g protein for a member on a ${goalMember.fitnessGoal} plan.\n`
+          }
+        }
+      }
+    } catch (fitnessErr) {
+      console.error('fitnessBlock compute error (non-fatal):', fitnessErr?.message)
+    }
+
 const mealPatternContext = await getMealPatternContext(req.user.familyId)
 const seasonal = getSeasonalContext()
 const expiringContext = expiringItems && expiringItems.length > 0
@@ -178,7 +219,7 @@ ${cuisine && cuisine !== 'Any cuisine'
 - If it's a dish type (e.g. "Burger", "Wrap / Burrito", "Salad", "Rice Bowl") → make that the format, and use pantry ingredients + cuisine context to fill it (e.g. a spiced chicken rice bowl, a paneer wrap, a daal-stuffed burrito).
 - Avoid defaulting to the single most globally-known dish for any cuisine.`
   : 'Suggest recipes from any cuisine based on available ingredients. Be diverse — do not default to the most famous dish from any one cuisine.'}
-${mealPatternContext}
+${mealPatternContext}${fitnessBlock}
 SEASONAL GUIDANCE:
 ${seasonal.context}
 
