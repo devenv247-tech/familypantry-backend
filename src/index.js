@@ -200,6 +200,8 @@ app.listen(PORT, () => {
   scheduleActivationEmail()
   const { scheduleExpiryReminder } = require('./jobs/expiryReminder')
   scheduleExpiryReminder()
+  const { scheduleFitnessRecalibration } = require('./jobs/fitnessRecalibration')
+  scheduleFitnessRecalibration()
 })
 
 // Clean up expired tokens from denylist every 24 hours

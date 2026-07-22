@@ -1,7 +1,67 @@
 const prisma = require('../utils/prisma')
-const { heightToCm } = require('../services/units')
+const { heightToCm, toKg } = require('../services/units')
 const macroEngine = require('../services/macroEngine')
 const { ACTIVITY_MULTIPLIERS } = macroEngine
+
+const VALID_FITNESS_GOALS = ['cut', 'lean_bulk', 'recomp', 'maintain']
+const PLAN_RANK = { free: 0, family: 1, premium: 2 }
+
+// Pure computation — no DB access. weightLogsAsc: [{weight, unit, loggedAt}] oldest-first.
+function buildMemberTargets(member, weightLogsAsc = []) {
+  if (!member.weight || !member.age) return null
+
+  const heightCm = heightToCm(member.height) ?? 170
+  const sex = member.gender
+  const { bmr: bmrValue, confidence } = macroEngine.bmr({ weightKg: member.weight, heightCm, age: member.age, sex })
+  const fTdee = macroEngine.formulaTdee(bmrValue, member.activityLevel)
+  const effectiveTdee = member.tdeeEstimate || fTdee
+  const source = member.tdeeEstimate ? 'adaptive' : 'formula'
+
+  const logsKg = weightLogsAsc.map(w => ({
+    weightKg: toKg(w.weight, w.unit) ?? member.weight,
+    loggedAt: w.loggedAt,
+  }))
+  const trendSeries = macroEngine.trendWeights(logsKg)
+  const latestTrend = trendSeries[trendSeries.length - 1]
+  const trendWeightKg = latestTrend ? Math.round(latestTrend.trendKg * 10) / 10 : null
+  const velocity = macroEngine.weeklyVelocity(trendSeries)
+
+  let calories = null
+  let flooredRatePct = null
+  let macros = null
+
+  if (member.fitnessGoal) {
+    const result = macroEngine.goalCalories({
+      tdee: effectiveTdee,
+      weightKg: member.weight,
+      fitnessGoal: member.fitnessGoal,
+      goalRatePct: member.goalRatePct || 0,
+      sex,
+      bmrValue,
+    })
+    calories = result.calories
+    flooredRatePct = result.flooredRatePct
+    macros = macroEngine.macroTargets({
+      calories,
+      weightKg: member.weight,
+      goalWeightKg: member.goalWeight || null,
+      fitnessGoal: member.fitnessGoal,
+    })
+  }
+
+  return {
+    bmr: Math.round(bmrValue),
+    confidence,
+    formulaTdee: Math.round(fTdee),
+    effectiveTdee: Math.round(effectiveTdee),
+    source,
+    calories,
+    flooredRatePct,
+    macros,
+    trendWeightKg,
+    weeklyVelocity: velocity !== null ? Math.round(velocity * 100) / 100 : null,
+  }
+}
 
 // Pre-activityLevel path: preserves exact existing behaviour for members with null activityLevel
 const legacyCalories = (bmr, goal) => {
@@ -188,11 +248,21 @@ exports.getHealthData = async (req, res) => {
         date: w.loggedAt,
       }))
 
+      // Targets breakdown for members with a fitness goal (weight logs already fetched desc, reverse for EWMA)
+      const targets = member.fitnessGoal
+        ? buildMemberTargets(member, [...member.weightLogs].reverse())
+        : null
+
       return {
         id: member.id,
         name: member.name,
         age: member.age,
+        gender: member.gender,
         genderMissing: !member.gender && !member.isBaby && (member.age === null || member.age >= 13),
+        fitnessGoal: member.fitnessGoal,
+        goalRatePct: member.goalRatePct,
+        tdeeEstimate: member.tdeeEstimate,
+        tdeeConfidence: member.tdeeConfidence,
         currentWeight: latestWeight,
         weightUnit: latestWeightUnit,
         goalWeight: member.goalWeight,
@@ -202,6 +272,7 @@ exports.getHealthData = async (req, res) => {
         allergens: member.allergens,
         dailyCalorieGoal,
         macroTargets,
+        targets,
         todayTotals: {
           calories: Math.round(todayTotals.calories),
           protein: Math.round(todayTotals.protein),
@@ -297,10 +368,10 @@ exports.logMeal = async (req, res) => {
   }
 }
 
-// Update member calorie goal
+// Update member goal — accepts legacy fields plus new fitness-coach fields
 exports.updateMemberGoal = async (req, res) => {
   try {
-    const { memberId, dailyCalorieGoal, goalWeight } = req.body
+    const { memberId, dailyCalorieGoal, goalWeight, fitnessGoal, goalRatePct, gender } = req.body
     const familyId = req.user.familyId
 
     const member = await prisma.member.findFirst({
@@ -308,18 +379,69 @@ exports.updateMemberGoal = async (req, res) => {
     })
     if (!member) return res.status(404).json({ error: 'Member not found' })
 
+    // Validate fitnessGoal value when provided
+    if (fitnessGoal !== undefined && fitnessGoal !== null && !VALID_FITNESS_GOALS.includes(fitnessGoal)) {
+      return res.status(400).json({ error: `fitnessGoal must be one of: ${VALID_FITNESS_GOALS.join(', ')}` })
+    }
+
+    // Gate setting a non-null fitnessGoal behind the fitness_coach feature flag (premium)
+    if (fitnessGoal) {
+      const [family, flag] = await Promise.all([
+        prisma.family.findUnique({ where: { id: familyId }, select: { plan: true } }),
+        prisma.featureFlag.findUnique({ where: { name: 'fitness_coach' } }),
+      ])
+      const hasAccess = flag && flag.enabled &&
+        (PLAN_RANK[family?.plan] ?? 0) >= (PLAN_RANK[flag.requiredPlan] ?? 0)
+      if (!hasAccess) {
+        return res.status(403).json({ error: 'Fitness Coach requires a Premium plan.' })
+      }
+
+      // Age safety: under-18 members may only use maintain
+      if (!macroEngine.isEligibleForGoal(member.age, fitnessGoal)) {
+        return res.status(400).json({
+          error: 'Members under 18 can only use the Maintain goal. Cut, lean bulk, and recomp are not available for minors.'
+        })
+      }
+    }
+
+    const updateData = {}
+    if (dailyCalorieGoal !== undefined) updateData.dailyCalorieGoal = parseInt(dailyCalorieGoal)
+    if (goalWeight !== undefined)       updateData.goalWeight   = goalWeight ? parseFloat(goalWeight) : null
+    if (fitnessGoal !== undefined)      updateData.fitnessGoal  = fitnessGoal || null
+    if (goalRatePct !== undefined)      updateData.goalRatePct  = goalRatePct != null ? parseFloat(goalRatePct) : null
+    if (gender !== undefined)           updateData.gender       = gender || null
+
     const updated = await prisma.member.update({
       where: { id: memberId },
-      data: {
-        ...(dailyCalorieGoal && { dailyCalorieGoal: parseInt(dailyCalorieGoal) }),
-        ...(goalWeight && { goalWeight: parseFloat(goalWeight) }),
-      }
+      data: updateData,
     })
 
     res.json({ success: true, member: updated })
   } catch (err) {
     console.error('updateMemberGoal error:', err)
     res.status(500).json({ error: 'Failed to update member goal' })
+  }
+}
+
+// GET /health-tracker/targets/:memberId — full deterministic breakdown, no AI
+exports.getMemberTargets = async (req, res) => {
+  try {
+    const { memberId } = req.params
+    const familyId = req.user.familyId
+
+    const member = await prisma.member.findFirst({
+      where: { id: memberId, familyId },
+      include: {
+        weightLogs: { orderBy: { loggedAt: 'asc' } },
+      },
+    })
+    if (!member) return res.status(404).json({ error: 'Member not found' })
+
+    const targets = buildMemberTargets(member, member.weightLogs)
+    res.json(targets)
+  } catch (err) {
+    console.error('getMemberTargets error:', err)
+    res.status(500).json({ error: 'Failed to compute targets' })
   }
 }
 

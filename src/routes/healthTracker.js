@@ -7,6 +7,7 @@ const {
   logWeight,
   logMeal,
   updateMemberGoal,
+  getMemberTargets,
   deleteNutritionLog,
   searchNutritionCache,
 } = require('../controllers/healthTrackerController')
@@ -29,6 +30,9 @@ router.delete('/log/:id', auth, deleteNutritionLog)
 router.post('/lookup', auth, lookupNutrition)
 router.post('/calculate-ingredients', auth, calculateIngredients)
 router.get('/nutrition/search', auth, searchNutritionCache)
+
+// Fitness-coach targets breakdown (deterministic math, no AI)
+router.get('/targets/:memberId', auth, getMemberTargets)
 
 // Kids nutrition mode
 router.get('/kids-summary/:memberId', auth, getKidsSummary)
