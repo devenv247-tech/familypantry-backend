@@ -280,12 +280,14 @@ Respond ONLY with valid JSON array, no markdown, no extra text:
   }
 ]`
 
-    const message = await callClaude(anthropic, {
+    const stream = anthropic.messages.stream({
       model: 'claude-sonnet-4-6',
       max_tokens: 24000,
       system: 'You are a meal planning API. Respond with only a valid raw JSON object. No markdown, no backticks, no explanation. Start with { and end with }.',
       messages: [{ role: 'user', content: prompt }]
-    }, 'meal_plan_generate')
+    })
+    const message = await stream.finalMessage()
+    await trackApiUsage('meal_plan_generate', message.usage?.input_tokens || 0, message.usage?.output_tokens || 0, 'claude-sonnet-4-6')
 
     if (message.stop_reason === 'max_tokens') {
       console.warn(`[generateWeekPlan] Response truncated at max_tokens. Response length: ${message.content[0].text.length} chars`)
