@@ -54,7 +54,7 @@ const isCreditsExhausted = (err) => {
   )
 }
 
-const handleAnthropicError = async (err, res) => {
+const handleAnthropicError = async (err, res, debug) => {
   console.error('Anthropic API error:', err?.message || err)
 
   if (isCreditsExhausted(err)) {
@@ -86,6 +86,8 @@ const handleAnthropicError = async (err, res) => {
     error: 'ai_error',
     userMessage: 'Something went wrong with AI. Please try again.',
     creditsExhausted: false,
+    // TODO remove debug
+    ...(debug !== undefined ? { debug } : {}),
   })
 }
 

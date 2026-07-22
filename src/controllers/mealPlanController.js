@@ -367,7 +367,9 @@ Respond ONLY with valid JSON array, no markdown, no extra text:
 
     res.json({ success: true, meals: saved, count: saved.length })
   } catch (err) {
-    return handleAnthropicError(err, res)
+    console.error('[generateWeekPlan] name=%s status=%s message=%s', err?.name, err?.status, err?.message)
+    console.error('[generateWeekPlan] stack:', err?.stack?.split('\n')[0])
+    return handleAnthropicError(err, res, String(err && err.message || err).slice(0, 300))
   }
 }
 
