@@ -1,13 +1,7 @@
 const prisma = require('../utils/prisma')
 const { heightToCm } = require('../services/units')
-
-const ACTIVITY_MULTIPLIERS = {
-  sedentary:   1.2,
-  light:       1.375,
-  moderate:    1.55,
-  active:      1.725,
-  very_active: 1.9,
-}
+const macroEngine = require('../services/macroEngine')
+const { ACTIVITY_MULTIPLIERS } = macroEngine
 
 // Pre-activityLevel path: preserves exact existing behaviour for members with null activityLevel
 const legacyCalories = (bmr, goal) => {
@@ -22,6 +16,24 @@ const legacyCalories = (bmr, goal) => {
 const calculateDailyCalories = (member) => {
   if (!member.age || !member.weight) return null
 
+  // New fitnessGoal path — fully delegated to macroEngine
+  if (member.fitnessGoal) {
+    const heightCm = heightToCm(member.height) ?? 170
+    const sex = member.gender
+    const { bmr: bmrValue } = macroEngine.bmr({ weightKg: member.weight, heightCm, age: member.age, sex })
+    const tdee = member.tdeeEstimate || macroEngine.formulaTdee(bmrValue, member.activityLevel)
+    const { calories } = macroEngine.goalCalories({
+      tdee,
+      weightKg: member.weight,
+      fitnessGoal: member.fitnessGoal,
+      goalRatePct: member.goalRatePct || 0,
+      sex,
+      bmrValue,
+    })
+    return Math.round(calories)
+  }
+
+  // Legacy path — zero behavior change for members without fitnessGoal
   // Fall back to 170 cm population average when height is missing or unparseable.
   // This introduces ~100–150 kcal error vs a true height — lower confidence.
   const heightCm = heightToCm(member.height) ?? 170
@@ -47,8 +59,18 @@ const calculateDailyCalories = (member) => {
   return Math.max(1200, Math.min(4000, calories)) // Clamp between 1200-4000
 }
 
-// Get macro targets based on goal
-const getMacroTargets = (calories, goal = '') => {
+// Get macro targets based on goal; pass member to use macroEngine when fitnessGoal is set
+const getMacroTargets = (calories, goal = '', member = null) => {
+  if (member && member.fitnessGoal) {
+    return macroEngine.macroTargets({
+      calories,
+      weightKg: member.weight,
+      goalWeightKg: member.goalWeight || null,
+      fitnessGoal: member.fitnessGoal,
+    })
+  }
+
+  // Legacy path
   const g = (goal || '').toLowerCase()
   if (g.includes('gain muscle') || g.includes('high protein')) {
     return {
@@ -109,7 +131,7 @@ exports.getHealthData = async (req, res) => {
     // Build member health profiles
     const memberProfiles = members.map(member => {
       const dailyCalorieGoal = member.dailyCalorieGoal || calculateDailyCalories(member)
-      const macroTargets = getMacroTargets(dailyCalorieGoal || 2000, member.goals)
+      const macroTargets = getMacroTargets(dailyCalorieGoal || 2000, member.goals, member)
 
       // Get logs for this member
       const memberLogs = nutritionLogs.filter(l =>

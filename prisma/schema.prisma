@@ -105,7 +105,6 @@ model Member {
   feedingLogs             FeedingLog[]
   growthLogs              GrowthLog[]
   activityLevel    String?
-  sex              String?
   fitnessGoal      String?
   goalRatePct      Float?
   tdeeEstimate     Float?
