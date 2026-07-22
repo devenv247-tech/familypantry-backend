@@ -1,4 +1,5 @@
 const prisma = require('../utils/prisma')
+const { heightToCm } = require('../services/units')
 
 const ACTIVITY_MULTIPLIERS = {
   sedentary:   1.2,
@@ -21,31 +22,16 @@ const legacyCalories = (bmr, goal) => {
 const calculateDailyCalories = (member) => {
   if (!member.age || !member.weight) return null
 
-  // Parse height - supports formats like "5'8", "175cm", "175"
-  let heightCm = null
-  if (member.height) {
-    const feetInches = member.height.match(/(\d+)'(\d+)?/)
-    const cm = member.height.match(/(\d+)\s*cm/i)
-    const plain = member.height.match(/^(\d+)$/)
-    if (feetInches) {
-      const feet = parseInt(feetInches[1])
-      const inches = parseInt(feetInches[2] || 0)
-      heightCm = (feet * 30.48) + (inches * 2.54)
-    } else if (cm) {
-      heightCm = parseFloat(cm[1])
-    } else if (plain) {
-      heightCm = parseFloat(plain[1])
-    }
-  }
+  // Fall back to 170 cm population average when height is missing or unparseable.
+  // This introduces ~100–150 kcal error vs a true height — lower confidence.
+  const heightCm = heightToCm(member.height) ?? 170
 
   // BMR using Mifflin-St Jeor. Female constant is -161, male (default) is +5.
   const weightKg = member.weight
   const age = member.age
   const isFemale = member.gender === 'female'
   const genderConstant = isFemale ? -161 : 5
-  let bmr = heightCm
-    ? (10 * weightKg) + (6.25 * heightCm) - (5 * age) + genderConstant
-    : (10 * weightKg) - (5 * age) + genderConstant
+  let bmr = (10 * weightKg) + (6.25 * heightCm) - (5 * age) + genderConstant
 
   const goal = (member.goals || '').toLowerCase()
   let calories
