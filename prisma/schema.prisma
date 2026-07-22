@@ -105,6 +105,13 @@ model Member {
   feedingLogs             FeedingLog[]
   growthLogs              GrowthLog[]
   activityLevel    String?
+  sex              String?
+  fitnessGoal      String?
+  goalRatePct      Float?
+  tdeeEstimate     Float?
+  tdeeUpdatedAt    DateTime?
+  tdeeConfidence   String?
+  weeklyAudits     WeeklyAudit[]
   gender           String?
   createdAt        DateTime       @default(now())
 }
@@ -340,4 +347,17 @@ model DailySuggestion {
   createdAt DateTime @default(now())
 
   @@unique([familyId, date])
+}
+
+model WeeklyAudit {
+  id           String   @id @default(cuid())
+  memberId     String
+  member       Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  weekStart    String
+  metrics      Json
+  verdict      String
+  coachSummary String?
+  createdAt    DateTime @default(now())
+
+  @@unique([memberId, weekStart])
 }
