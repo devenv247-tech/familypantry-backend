@@ -282,13 +282,25 @@ Respond ONLY with valid JSON array, no markdown, no extra text:
 
     const message = await callClaude(anthropic, {
       model: 'claude-sonnet-4-6',
-      max_tokens: 16000,
+      max_tokens: 24000,
+      system: 'You are a meal planning API. Respond with only a valid raw JSON object. No markdown, no backticks, no explanation. Start with { and end with }.',
       messages: [{ role: 'user', content: prompt }]
     }, 'meal_plan_generate')
 
+    if (message.stop_reason === 'max_tokens') {
+      console.warn(`[generateWeekPlan] Response truncated at max_tokens. Response length: ${message.content[0].text.length} chars`)
+    }
+
     let text = message.content[0].text.trim()
     text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-    const generatedMeals = JSON.parse(text)
+
+    let generatedMeals
+    try {
+      generatedMeals = JSON.parse(text)
+    } catch (parseErr) {
+      console.error('[generateWeekPlan] JSON.parse failed:', parseErr.message)
+      return res.status(502).json({ error: 'Meal plan generation returned an invalid response, please try again' })
+    }
 
     const allSlots = []
     const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
