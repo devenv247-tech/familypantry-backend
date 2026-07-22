@@ -7,6 +7,7 @@ const VALID_FITNESS_GOALS = ['cut', 'lean_bulk', 'recomp', 'maintain']
 const PLAN_RANK = { free: 0, family: 1, premium: 2 }
 
 // Pure computation — no DB access. weightLogsAsc: [{weight, unit, loggedAt}] oldest-first.
+// Exported so the fitnessRecalibration job can reuse it without duplicating logic.
 function buildMemberTargets(member, weightLogsAsc = []) {
   if (!member.weight || !member.age) return null
 
@@ -448,6 +449,37 @@ exports.getMemberTargets = async (req, res) => {
   } catch (err) {
     console.error('getMemberTargets error:', err)
     res.status(500).json({ error: 'Failed to compute targets' })
+  }
+}
+
+exports.buildMemberTargets = buildMemberTargets
+
+// GET /health-tracker/audit/:memberId — latest WeeklyAudit, gated behind fitness_coach flag
+exports.getLatestAudit = async (req, res) => {
+  try {
+    const { memberId } = req.params
+    const familyId = req.user.familyId
+
+    const member = await prisma.member.findFirst({ where: { id: memberId, familyId } })
+    if (!member) return res.status(404).json({ error: 'Member not found' })
+
+    const [family, flag] = await Promise.all([
+      prisma.family.findUnique({ where: { id: familyId }, select: { plan: true } }),
+      prisma.featureFlag.findUnique({ where: { name: 'fitness_coach' } }),
+    ])
+    const hasAccess = flag && flag.enabled &&
+      (PLAN_RANK[family?.plan] ?? 0) >= (PLAN_RANK[flag.requiredPlan] ?? 0)
+    if (!hasAccess) return res.status(403).json({ error: 'Fitness Coach requires a Premium plan.' })
+
+    const audit = await prisma.weeklyAudit.findFirst({
+      where: { memberId },
+      orderBy: { weekStart: 'desc' },
+    })
+
+    res.json({ audit: audit ?? null })
+  } catch (err) {
+    console.error('getLatestAudit error:', err)
+    res.status(500).json({ error: 'Failed to get audit' })
   }
 }
 
