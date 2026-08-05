@@ -1,0 +1,240 @@
+const Anthropic = require('@anthropic-ai/sdk')
+const prisma = require('../utils/prisma')
+const { trackApiUsage } = require('../utils/anthropicError')
+
+const callClaude = async (anthropic, params, endpoint) => {
+  const message = await anthropic.messages.create(params)
+  await trackApiUsage(endpoint, message.usage?.input_tokens || 0, message.usage?.output_tokens || 0, params.model)
+  return message
+}
+
+const normalizeKey = (mealName) => {
+  // Common words that don't change the food item identity
+  const stopWords = new Set([
+    'canada', 'canadian', 'the', 'a', 'an', 'and', 'with', 'without',
+    'style', 'classic', 'original', 'new', 'special', 'deluxe', 'extra',
+    'size', 'large', 'small', 'medium', 'regular', 'big', 'little',
+    'fresh', 'grilled', 'fried', 'baked', 'roasted', 'crispy', 'creamy',
+    'hot', 'cold', 'iced', 'warm', 'spicy', 'mild',
+    'combo', 'meal', 'sandwich', 'wrap', 'burger', 'bowl', 'plate',
+  ])
+
+  return mealName
+    .toLowerCase()
+    .replace(/[''`´]/g, '')              // remove all apostrophe variants
+    .replace(/®|™|©/g, '')              // remove trademark symbols
+    .replace(/\bno\.\s*\d+\b/g, '')     // remove "No. 1", "No. 2" etc
+    .replace(/\b\d+(oz|ml|g|kg|cal|kcal|lb|lbs)\b/g, '') // remove measurements
+    .replace(/[^a-z0-9\s]/g, ' ')       // remove remaining punctuation
+    .replace(/\s+/g, ' ')               // collapse spaces
+    .trim()
+    .split(' ')
+    .filter(w => w.length > 1)          // drop single letters
+    .filter(w => !stopWords.has(w))     // drop stop words
+    .sort()                             // sort so word order doesn't matter
+    .join(' ')
+}
+
+const lookupNutrition = async ({ mealName, servings = 1 }) => {
+  if (!mealName) throw Object.assign(new Error('Meal name required'), { validation: true })
+
+  const searchKey = normalizeKey(mealName)
+  const now = new Date()
+
+  const cached = await prisma.nutritionCache.findUnique({
+    where: { searchKey }
+  })
+
+  if (cached && cached.expiresAt > now) {
+    await prisma.nutritionCache.update({
+      where: { searchKey },
+      data: { hitCount: { increment: 1 } }
+    })
+
+    return {
+      found: true,
+      mealName: cached.mealName,
+      servingSize: cached.servingSize,
+      calories: Math.round((cached.calories || 0) * servings),
+      protein: Math.round((cached.protein || 0) * servings),
+      carbs: Math.round((cached.carbs || 0) * servings),
+      fat: Math.round((cached.fat || 0) * servings),
+      fiber: Math.round((cached.fiber || 0) * servings),
+      sugar: Math.round((cached.sugar || 0) * servings),
+      sodium: Math.round((cached.sodium || 0) * servings),
+      calcium: cached.calcium ? Math.round(cached.calcium * servings * 10) / 10 : null,
+      iron: cached.iron ? Math.round(cached.iron * servings * 10) / 10 : null,
+      vitaminD: cached.vitaminD ? Math.round(cached.vitaminD * servings) : null,
+      confidence: cached.confidence,
+      source: cached.source,
+      fromCache: true,
+    }
+  }
+
+  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+  const message = await callClaude(anthropic, {
+    model: 'claude-sonnet-4-6',
+    max_tokens: 500,
+    system: 'You are a JSON API. Respond ONLY with raw JSON. No markdown, no backticks, no explanation. Start with { and end with }.',
+    messages: [{
+      role: 'user',
+      content: `You are a nutrition database for Canadian food. Look up the nutrition info for: "${mealName}"
+
+If this is a restaurant item (McDonald's, Tim Hortons, Subway, A&W, Harvey's, Wendy's, Popeyes, KFC, Pizza Pizza, Boston Pizza, Swiss Chalet, Dairy Queen, Burger King, Five Guys, Chipotle, etc.) use their official Canadian nutrition data.
+
+If it's a home-cooked meal or generic food, estimate based on standard recipe for 1 serving.
+
+Respond ONLY with valid JSON, no markdown:
+{
+  "found": true,
+  "mealName": "exact name with restaurant if applicable",
+  "servingSize": "1 sandwich / 1 cup / 1 slice etc",
+  "calories": 450,
+  "protein": 25,
+  "carbs": 40,
+  "fat": 18,
+  "fiber": 2,
+  "sugar": 8,
+  "sodium": 890,
+  "calcium": 120,
+  "iron": 3.2,
+  "vitaminD": 80,
+  "confidence": "high/medium/low",
+  "source": "McDonald's Canada official / estimated"
+}
+
+calcium is in mg, iron is in mg, vitaminD is in IU. Estimate based on ingredients if not officially known.`
+    }]
+  }, 'nutrition_lookup')
+
+  let text = message.content[0].text.trim()
+  text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+  const nutrition = JSON.parse(text)
+
+  if (nutrition.found) {
+    // Store in cache — 90 day expiry
+    const expiresAt = new Date()
+    expiresAt.setDate(expiresAt.getDate() + 90)
+
+    await prisma.nutritionCache.upsert({
+      where: { searchKey },
+      create: {
+        searchKey,
+        mealName: nutrition.mealName,
+        calories: nutrition.calories,
+        protein: nutrition.protein,
+        carbs: nutrition.carbs,
+        fat: nutrition.fat,
+        fiber: nutrition.fiber,
+        sugar: nutrition.sugar,
+        sodium: nutrition.sodium,
+        calcium: nutrition.calcium || null,
+        iron: nutrition.iron || null,
+        vitaminD: nutrition.vitaminD || null,
+        servingSize: nutrition.servingSize,
+        source: nutrition.source,
+        confidence: nutrition.confidence,
+        hitCount: 1,
+        expiresAt,
+      },
+      update: {
+        mealName: nutrition.mealName,
+        calories: nutrition.calories,
+        protein: nutrition.protein,
+        carbs: nutrition.carbs,
+        fat: nutrition.fat,
+        fiber: nutrition.fiber,
+        sugar: nutrition.sugar,
+        sodium: nutrition.sodium,
+        calcium: nutrition.calcium || null,
+        iron: nutrition.iron || null,
+        vitaminD: nutrition.vitaminD || null,
+        servingSize: nutrition.servingSize,
+        source: nutrition.source,
+        confidence: nutrition.confidence,
+        hitCount: { increment: 1 },
+        expiresAt,
+      }
+    })
+  }
+
+  // Scale by servings
+  if (servings > 1 && nutrition.found) {
+    nutrition.calories = Math.round(nutrition.calories * servings)
+    nutrition.protein = Math.round(nutrition.protein * servings)
+    nutrition.carbs = Math.round(nutrition.carbs * servings)
+    nutrition.fat = Math.round(nutrition.fat * servings)
+    nutrition.fiber = Math.round(nutrition.fiber * servings)
+    nutrition.sugar = Math.round(nutrition.sugar * servings)
+    nutrition.sodium = Math.round(nutrition.sodium * servings)
+  }
+
+  nutrition.fromCache = false
+  return nutrition
+}
+
+const calculateFromDescription = async ({ ingredients, description }) => {
+  const freeText = description?.trim() || null
+  if (!freeText && (!ingredients || !Array.isArray(ingredients) || ingredients.length === 0)) {
+    throw Object.assign(new Error('Provide a description or ingredients list'), { validation: true })
+  }
+
+  let ingredientList = ''
+  if (freeText) {
+    ingredientList = freeText.trim()
+  } else {
+    ingredientList = ingredients
+      .filter(i => i.name && i.quantity)
+      .map(i => `- ${i.quantity} ${i.unit || 'g'} ${i.name}`)
+      .join('\n')
+  }
+
+  if (!ingredientList) {
+    throw Object.assign(new Error('No valid ingredients provided'), { validation: true })
+  }
+
+  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+  const message = await callClaude(anthropic, {
+    model: 'claude-sonnet-4-6',
+    max_tokens: 500,
+    system: 'You are a JSON API. Respond ONLY with raw JSON. No markdown, no backticks, no explanation. Start with { and end with }.',
+    messages: [{
+      role: 'user',
+      content: `Calculate the total combined nutrition for this meal based on the description below.
+The description may be free-text natural language or a structured ingredient list — handle both.
+Identify all ingredients and quantities mentioned, estimate any that are vague (e.g. "a handful", "1 spoon").
+Sum up all ingredients and return the total nutrition for the entire meal as consumed.
+Use standard Canadian nutrition data. Be accurate — this is for health tracking.
+
+Meal description:
+${ingredientList}
+
+Respond ONLY with valid JSON:
+{
+  "found": true,
+  "mealName": "descriptive name based on what was described",
+  "servingSize": "full recipe / 1 serving",
+  "calories": 450,
+  "protein": 28,
+  "carbs": 52,
+  "fat": 14,
+  "fiber": 6,
+  "sugar": 18,
+  "sodium": 320,
+  "calcium": 200,
+  "iron": 2.1,
+  "vitaminD": 40,
+  "confidence": "medium",
+  "source": "calculated from description"
+}`
+    }]
+  }, 'ingredient_calculator')
+
+  let text = message.content[0].text.trim()
+  text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+  return JSON.parse(text)
+}
+
+module.exports = { normalizeKey, lookupNutrition, calculateFromDescription }
