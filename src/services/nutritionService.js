@@ -168,6 +168,9 @@ calcium is in mg, iron is in mg, vitaminD is in IU. Estimate based on ingredient
     nutrition.fiber = Math.round(nutrition.fiber * servings)
     nutrition.sugar = Math.round(nutrition.sugar * servings)
     nutrition.sodium = Math.round(nutrition.sodium * servings)
+    nutrition.calcium = nutrition.calcium ? Math.round(nutrition.calcium * servings * 10) / 10 : null
+    nutrition.iron = nutrition.iron ? Math.round(nutrition.iron * servings * 10) / 10 : null
+    nutrition.vitaminD = nutrition.vitaminD ? Math.round(nutrition.vitaminD * servings) : null
   }
 
   nutrition.fromCache = false
