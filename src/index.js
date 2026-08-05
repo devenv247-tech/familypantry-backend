@@ -101,6 +101,7 @@ const LARGE_BODY_ROUTES = [
   '/api/pantry/scan',         // base64 image upload
   '/api/recipes/suggest',     // member profiles + pantry list
   '/api/recipes/family',      // member profiles + pantry list
+  '/api/recipes/describe',        // pantry list + member profiles
   '/api/mealplan/generate-week', // full week plan generation
 ]
 

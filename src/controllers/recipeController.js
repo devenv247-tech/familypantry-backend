@@ -678,6 +678,186 @@ Respond ONLY with valid JSON, no markdown:
   }
 }
 
+exports.describeRecipe = async (req, res) => {
+  try {
+    const { prompt: userPrompt, modifier } = req.body
+
+    // 1. Validate
+    const promptTrimmed = typeof userPrompt === 'string' ? userPrompt.trim() : ''
+    if (promptTrimmed.length === 0) {
+      return res.status(400).json({ error: 'Missing prompt', message: 'Please enter a food or cooking question.' })
+    }
+    if (promptTrimmed.length > 300) {
+      return res.status(400).json({ error: 'Request too long', message: 'Keep it under 300 characters.' })
+    }
+
+    // 2. Feature flag + family (parallel)
+    const [family, askNookaFlag] = await Promise.all([
+      prisma.family.findUnique({ where: { id: req.user.familyId } }),
+      prisma.featureFlag.findUnique({ where: { name: 'ask_nooka' } }),
+    ])
+
+    const flagAllowed = askNookaFlag && askNookaFlag.enabled &&
+      (PLAN_RANK[family?.plan] ?? 0) >= (PLAN_RANK[askNookaFlag.requiredPlan] ?? 0)
+    if (!flagAllowed) {
+      return res.status(403).json({ error: 'unavailable', message: 'Ask Nooka is not available right now.' })
+    }
+
+    // 3. Free-plan weekly limit
+    const currentWeek = getWeekKey()
+    if (family.plan === 'free') {
+      if (family.recipeWeek === currentWeek && family.recipeCount >= 5) {
+        return res.status(403).json({
+          error: 'Weekly limit reached',
+          message: 'Upgrade to Family plan for unlimited recipes.',
+          limitReached: true,
+        })
+      }
+      if (family.recipeWeek !== currentWeek) {
+        await prisma.family.update({
+          where: { id: family.id },
+          data: { recipeCount: 0, recipeWeek: currentWeek },
+        })
+      }
+    }
+
+    // 4. Food safety intercept — no AI call, no counter increment
+    const FOOD_SAFETY_RE = /\b(still good|still safe|gone bad|go bad|expired|spoiled|off|smells? (bad|funny|weird)|food poisoning|safe to eat|been (in|out|sitting))\b/i
+    if (FOOD_SAFETY_RE.test(promptTrimmed)) {
+      return res.status(200).json({
+        type: 'safety',
+        title: 'Food safety',
+        message: "When in doubt, throw it out. Nooka can't assess whether a specific food is safe to eat — that depends on temperature, handling and time in ways we can't see. For Canadian food safety guidance, check the Canadian Food Inspection Agency at inspection.canada.ca.",
+      })
+    }
+
+    // 5. Domain guard — cheap haiku pre-check, max_tokens 5
+    const guardMsg = await callClaude(anthropic, {
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 5,
+      system: 'You are a topic classifier. Answer with a single word: YES or NO.',
+      messages: [{
+        role: 'user',
+        content: `Is this a request about food, cooking, recipes, ingredients, kitchen technique, or kitchen equipment? Reply YES or NO.\n\n"${promptTrimmed}"`,
+      }],
+    }, 'ask_nooka_guard')
+
+    const guardAnswer = guardMsg.content[0].text.trim().toUpperCase()
+    if (!guardAnswer.startsWith('YES')) {
+      return res.status(400).json({ error: 'off_topic', message: 'Ask Nooka only handles food and cooking questions.' })
+    }
+
+    // 6. Fetch context for main generation
+    const [rawPantry, allMembers, mealPatternContext] = await Promise.all([
+      prisma.pantryItem.findMany({ where: { familyId: req.user.familyId } }),
+      prisma.member.findMany({ where: { familyId: req.user.familyId } }),
+      getMealPatternContext(req.user.familyId),
+    ])
+    const pantryItems = filterUsable(rawPantry)
+
+    const pantryList = pantryItems.map(i => `${i.name} (${i.quantity} ${i.unit})`).join(', ')
+    const seasonal = getSeasonalContext()
+    const memberDetails = allMembers.map((m, i) =>
+      `Member ${i + 1}: age=${m.age || 'unknown'}, goal=${m.goals || 'healthy eating'}, dietary=${m.dietary || 'none'}, allergens=${m.allergens || 'none'}, weight=${m.weight || 'unknown'}`
+    ).join('; ')
+
+    const finalRequest = modifier?.trim()
+      ? `${promptTrimmed}\nAdjustment: ${modifier.trim()}`
+      : promptTrimmed
+
+    const mainPrompt = `You are a recipe assistant for a Canadian family cooking app.
+
+User's request: ${finalRequest}
+
+Family members: ${memberDetails || 'No specific member data'}
+Items currently in pantry: ${pantryList || 'Pantry is empty'}
+${mealPatternContext}
+SEASONAL GUIDANCE:
+${seasonal.context}
+
+ALLERGEN RULES - MUST FOLLOW:
+1. Member allergens are in their profile as "allergens=X,Y,Z"
+2. Scan every ingredient for allergen conflicts
+3. If an ingredient may trigger a member's allergen, add it to allergenWarnings
+4. Milk: milk, cream, butter, cheese, paneer, yogurt, whey, casein, lactose
+5. Eggs: eggs, egg white, egg yolk, mayonnaise
+6. Wheat/Gluten: wheat, flour, bread, pasta, oats, barley, rye, tortilla, wrap
+7. Peanuts: peanuts, peanut butter, peanut oil
+8. Tree nuts: almonds, cashews, walnuts, pecans, pistachios
+9. Include allergen-conflicting recipes but populate allergenWarnings fully
+
+YIELD AND NUTRITION BASIS - MUST FOLLOW:
+- "yield" describes the natural output: "serves 4", "about 2 cups", "12 cookies", "1 loaf"
+- "nutritionBasis" must agree with yield: "per serving", "per tbsp", "per cookie"
+- A sauce or condiment must NOT claim "serves 4" — use a volume or piece unit instead
+- Scale ingredient quantities to match what the user asked for (e.g. "for 15 people" → yield "serves 15")
+
+Respond ONLY with valid raw JSON. No markdown, no backticks. Start with { end with }:
+{
+  "type": "recipe",
+  "name": "Recipe name",
+  "description": "One or two sentences",
+  "icon": "🍽️",
+  "time": "25 min",
+  "difficulty": "Easy",
+  "yield": "serves 4",
+  "nutritionBasis": "per serving",
+  "tags": ["High Protein", "Quick"],
+  "ingredients": [{"name": "Chicken breast", "quantity": 500, "unit": "g"}],
+  "steps": ["Step 1", "Step 2", "Step 3", "Step 4"],
+  "nutrition": {"calories": 450, "protein": 35, "carbs": 30, "fat": 12, "fiber": 4},
+  "allergenWarnings": [{"member": "Member 1", "allergen": "Milk", "ingredient": "Butter"}]
+}`
+
+    const message = await callClaude(anthropic, {
+      model: 'claude-sonnet-4-6',
+      max_tokens: 3000,
+      system: 'You are a JSON API. Respond ONLY with raw JSON. No markdown, no backticks, no explanation. Start with { and end with }.',
+      messages: [{ role: 'user', content: mainPrompt }],
+    }, 'ask_nooka')
+
+    let text = message.content[0].text.trim()
+    text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+
+    let recipe
+    try {
+      recipe = JSON.parse(text)
+    } catch (parseErr) {
+      console.error('describeRecipe JSON parse error:', text.slice(-200))
+      return res.status(500).json({ error: 'Failed to parse recipe response. Please try again.' })
+    }
+
+    // Shopping list — ingredients not in pantry (filterUsable set), capped at 8
+    const shoppingList = (recipe.ingredients || [])
+      .filter(ing => !nameMatchesPantry(ing.name, pantryItems))
+      .slice(0, 8)
+      .map(({ name, quantity, unit }) => ({ name, quantity, unit }))
+
+    if (family.plan === 'free') {
+      await prisma.family.update({
+        where: { id: family.id },
+        data: {
+          recipeCount: { increment: 1 },
+          recipeWeek: currentWeek,
+        },
+      })
+    }
+
+    res.json({
+      ...recipe,
+      shoppingList,
+      usage: family.plan === 'free' ? {
+        used: (family.recipeWeek === currentWeek ? family.recipeCount : 0) + 1,
+        limit: 5,
+        plan: 'free',
+      } : { plan: family.plan },
+    })
+
+  } catch (err) {
+    return handleAnthropicError(err, res)
+  }
+}
+
 exports.estimateCosts = async (req, res) => {
   try {
     const { recipes } = req.body
