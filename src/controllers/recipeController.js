@@ -786,6 +786,12 @@ ALLERGEN RULES - MUST FOLLOW:
 8. Tree nuts: almonds, cashews, walnuts, pecans, pistachios
 9. Include allergen-conflicting recipes but populate allergenWarnings fully
 
+INGREDIENT RULES - MUST FOLLOW:
+1. Composite packed ingredients must be ONE entry. Never split them (e.g. "Chipotle peppers in adobo" is one ingredient — never add a second entry for "Adobo sauce from the can").
+2. Ingredient name must be a clean noun phrase. No parenthetical prep notes — no "(from pantry)", "(sliced into rounds)", "(to thin if needed)", "(ground or lightly toasted)". Prep belongs in steps.
+3. Use generic ingredient names even when the pantry lists a specific brand. Write "Mayonnaise" not "Hellmann's Real Mayonnaise", "Olive oil" not "Bertolli Olive Oil".
+4. Steps must never reference family members by placeholder. Never write "set aside for Member 1 (age 1)". Describe dietary modifications generically: "set aside a mild unseasoned portion for young children".
+
 YIELD AND NUTRITION BASIS - MUST FOLLOW:
 - "yield" describes the natural output: "serves 4", "about 2 cups", "12 cookies", "1 loaf"
 - "nutritionBasis" must agree with yield: "per serving", "per tbsp", "per cookie"
@@ -827,11 +833,13 @@ Respond ONLY with valid raw JSON. No markdown, no backticks. Start with { end wi
       return res.status(500).json({ error: 'Failed to parse recipe response. Please try again.' })
     }
 
-    // Shopping list — ingredients not in pantry (filterUsable set), capped at 8
+    // Shopping list — ingredients not in pantry, excluding staples nobody shops for
+    const SHOPPING_EXCLUDE = /^(water|ice|salt)$/i
     const shoppingList = (recipe.ingredients || [])
       .filter(ing => !nameMatchesPantry(ing.name, pantryItems))
+      .filter(ing => !SHOPPING_EXCLUDE.test(ing.name.trim()))
       .slice(0, 8)
-      .map(({ name, quantity, unit }) => ({ name, quantity, unit }))
+      .map(ing => ing.name)
 
     if (family.plan === 'free') {
       await prisma.family.update({
