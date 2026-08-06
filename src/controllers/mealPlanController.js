@@ -3,6 +3,7 @@ const Anthropic = require('@anthropic-ai/sdk')
 const { handleAnthropicError, trackApiUsage } = require('../utils/anthropicError')
 const { getMealPatternContext } = require('./mealPatternController')
 const { getSeasonalContext } = require('../utils/seasons')
+const { buildAnonymizedProfiles, substituteNames } = require('../utils/memberAnonymizer')
 
 const callClaude = async (anthropic, params, endpoint) => {
   const message = await anthropic.messages.create(params)
@@ -199,14 +200,7 @@ exports.generateWeekPlan = async (req, res) => {
 
     const pantryList = pantryItems.map(i => `${i.name} (${i.quantity} ${i.unit})`).join(', ')
 
-    const memberLabels = ['Person A', 'Person B', 'Person C', 'Person D', 'Person E', 'Person F']
-    const memberMap = {}
-    const memberDetails = targetMembers.map((m, i) => {
-      const label = memberLabels[i] || `Person ${i + 1}`
-      memberMap[label] = m.name
-    const weight = m.weight ? `${m.weight}${m.weightUnit || 'kg'}` : 'unknown'
-      return `${label}: age=${m.age || 'unknown'}, weight=${weight}, height=${m.height || 'unknown'}, health goals=${m.goals || 'healthy eating'}, dietary restrictions=${m.dietary || 'none'}, allergens=${m.allergens || 'none'}`
-    }).join('; ')
+    const { profileText: memberDetails, nameMap } = buildAnonymizedProfiles(targetMembers)
 
     const mealPatternContext = await getMealPatternContext(familyId)
     const seasonal = getSeasonalContext()
@@ -217,7 +211,7 @@ exports.generateWeekPlan = async (req, res) => {
 
     const prompt = `You are a professional family meal planning assistant. Generate a detailed full week meal plan.
 
-Family members: ${targetMembers.length} (${Object.keys(memberMap).join(', ')})
+Family members: ${targetMembers.length} (${Object.keys(nameMap).join(', ')})
 Health profiles: ${memberDetails || 'No specific data'}
 Pantry items available: ${pantryList || 'Empty pantry'}
 
@@ -244,7 +238,7 @@ QUALITY RULES - VERY IMPORTANT:
 - Each step should be one complete instruction sentence
 - Ingredients must list realistic quantities from pantry and what needs to be bought
 - Nutrition must be realistic and accurate for the meal
-- Descriptions must mention which persons health goals this serves using Person A/B/C labels
+- Descriptions must mention which members' health goals this serves using Member N labels (e.g. Member 1, Member 2)
 - Breakfast: simple, 10-20 mins
 - Snack: very simple, under 10 mins, light calories
 - Lunch: medium complexity, 20-30 mins
@@ -258,7 +252,7 @@ Respond ONLY with valid JSON array, no markdown, no extra text:
     "mealType": "Breakfast",
     "recipeName": "Full descriptive recipe name",
     "icon": "🍽️",
-    "description": "Two sentence description mentioning Person A/B/C health goals and why this meal suits them",
+    "description": "Two sentence description mentioning Member 1/Member 2 health goals and why this meal suits them",
     "ingredients": [
       {"name": "ingredient name", "quantity": 1, "unit": "cup"}
     ],
@@ -266,7 +260,7 @@ Respond ONLY with valid JSON array, no markdown, no extra text:
       {"name": "ingredient name", "quantity": 1, "unit": "pcs"}
     ],
     "allergenWarnings": [
-      {"member": "Person A", "allergen": "Milk", "ingredient": "Homo Milk"}
+      {"member": "Member 1", "allergen": "Milk", "ingredient": "Homo Milk"}
     ],
     "steps": ["Step 1", "Step 2", "Step 3", "Step 4"],
     "time": "20 mins",
@@ -346,6 +340,9 @@ Respond ONLY with valid JSON array, no markdown, no extra text:
       })
     })
 
+    // Substitute real names before writing to DB so stored plans contain real names, not labels.
+    generatedMeals = substituteNames(generatedMeals, nameMap)
+
     await prisma.mealPlan.deleteMany({
       where: { familyId, weekStart }
     })
@@ -365,10 +362,7 @@ Respond ONLY with valid JSON array, no markdown, no extra text:
               description: meal.description,
               ingredients: meal.ingredients || [],
               missing: meal.missing || [],
-              allergenWarnings: (meal.allergenWarnings || []).map(w => ({
-                ...w,
-                member: memberMap[w.member] || w.member
-              })),
+              allergenWarnings: meal.allergenWarnings || [],
               steps: meal.steps || [],
               time: meal.time,
               calories: meal.nutrition?.calories || meal.calories || null,
