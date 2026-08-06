@@ -146,6 +146,10 @@ exports.suggestRecipes = async (req, res) => {
       },
     })
 
+    if (memberProfiles.length === 0) {
+      return res.status(400).json({ error: 'No matching members found' })
+    }
+
     const { profileText: memberDetails, nameMap } = buildAnonymizedProfiles(memberProfiles)
 
     // Goal-aware fitness injection (skipped silently on any error)
@@ -222,12 +226,13 @@ ALLERGEN RULES - MUST FOLLOW:
 2. For EACH recipe, scan EVERY ingredient for allergen conflicts
 3. If an ingredient contains or may contain an allergen that any member has, add it to allergenWarnings
 4. Example: if Member 1 has allergens=Milk and recipe uses "Homo Milk" → allergenWarnings should include: {"member": "Member 1", "allergen": "Milk", "ingredient": "Homo Milk"}
-5. Milk allergen triggers on: milk, cream, butter, cheese, paneer, yogurt, whey, casein, lactose
-6. Eggs allergen triggers on: eggs, egg white, egg yolk, mayonnaise
-7. Wheat/Gluten allergen triggers on: wheat, flour, bread, pasta, oats, barley, rye, tortilla, wrap
-8. Peanuts allergen triggers on: peanuts, peanut butter, peanut oil
-9. Tree nuts allergen triggers on: almonds, cashews, walnuts, pecans, pistachios
-10. Even if a recipe has allergen conflicts, still suggest it but populate allergenWarnings fully
+5. CRITICAL: ONLY emit allergenWarnings for allergens EXPLICITLY listed in a member's profile. If a member has allergens=none or no allergens are recorded, emit ZERO warnings for that member. If no member profiles are provided, allergenWarnings must be an empty array. Never consult the trigger lists below unless the member has that specific allergen explicitly recorded — the trigger lists describe what counts as that allergen, not a reason to scan all ingredients independently.
+6. Milk allergen triggers on: milk, cream, butter, cheese, paneer, yogurt, whey, casein, lactose
+7. Eggs allergen triggers on: eggs, egg white, egg yolk, mayonnaise
+8. Wheat/Gluten allergen triggers on: wheat, flour, bread, pasta, oats, barley, rye, tortilla, wrap
+9. Peanuts allergen triggers on: peanuts, peanut butter, peanut oil
+10. Tree nuts allergen triggers on: almonds, cashews, walnuts, pecans, pistachios
+11. Even if a recipe has allergen conflicts, still suggest it but populate allergenWarnings fully
 VARIETY RULES - MUST FOLLOW:
 1. The 3 recipes MUST use different cooking methods (e.g. one grilled/roasted, one curry/braised, one stir-fried/pan-seared)
 2. Do NOT default to the most famous or obvious dish. If Indian cuisine, do NOT suggest Butter Chicken unless no other option exists
@@ -399,12 +404,13 @@ ALLERGEN RULES - MUST FOLLOW:
 1. Member allergens are listed in their profile as "allergens=X,Y,Z"
 2. For EACH recipe, scan EVERY ingredient for allergen conflicts
 3. If an ingredient contains or may contain an allergen that any member has, add it to allergenWarnings
-4. Milk allergen triggers on: milk, cream, butter, cheese, paneer, yogurt, whey, casein, lactose
-5. Eggs allergen triggers on: eggs, egg white, egg yolk, mayonnaise
-6. Wheat/Gluten allergen triggers on: wheat, flour, bread, pasta, oats, barley, rye, tortilla, wrap
-7. Peanuts allergen triggers on: peanuts, peanut butter, peanut oil
-8. Tree nuts allergen triggers on: almonds, cashews, walnuts, pecans, pistachios
-9. Even if a recipe has allergen conflicts, still suggest it but populate allergenWarnings fully
+4. CRITICAL: ONLY emit allergenWarnings for allergens EXPLICITLY listed in a member's profile. If a member has allergens=none or no allergens are recorded, emit ZERO warnings for that member. If no member profiles are provided, allergenWarnings must be an empty array. Never consult the trigger lists below unless the member has that specific allergen explicitly recorded — the trigger lists describe what counts as that allergen, not a reason to scan all ingredients independently.
+5. Milk allergen triggers on: milk, cream, butter, cheese, paneer, yogurt, whey, casein, lactose
+6. Eggs allergen triggers on: eggs, egg white, egg yolk, mayonnaise
+7. Wheat/Gluten allergen triggers on: wheat, flour, bread, pasta, oats, barley, rye, tortilla, wrap
+8. Peanuts allergen triggers on: peanuts, peanut butter, peanut oil
+9. Tree nuts allergen triggers on: almonds, cashews, walnuts, pecans, pistachios
+10. Even if a recipe has allergen conflicts, still suggest it but populate allergenWarnings fully
 
 VARIETY RULE: Do NOT default to famous or overused dishes (e.g. Butter Chicken for Indian cuisine). Choose a recipe that creatively uses pantry staples like grains, legumes, or vegetables already available. Prefer regional home-style dishes over restaurant classics.
 
@@ -771,12 +777,13 @@ ALLERGEN RULES - MUST FOLLOW:
 1. Member allergens are in their profile as "allergens=X,Y,Z"
 2. Scan every ingredient for allergen conflicts
 3. If an ingredient may trigger a member's allergen, add it to allergenWarnings
-4. Milk: milk, cream, butter, cheese, paneer, yogurt, whey, casein, lactose
-5. Eggs: eggs, egg white, egg yolk, mayonnaise
-6. Wheat/Gluten: wheat, flour, bread, pasta, oats, barley, rye, tortilla, wrap
-7. Peanuts: peanuts, peanut butter, peanut oil
-8. Tree nuts: almonds, cashews, walnuts, pecans, pistachios
-9. Include allergen-conflicting recipes but populate allergenWarnings fully
+4. CRITICAL: ONLY emit allergenWarnings for allergens EXPLICITLY listed in a member's profile. If a member has allergens=none or no allergens are recorded, emit ZERO warnings for that member. If no member profiles are provided, allergenWarnings must be an empty array. Never consult the trigger lists below unless the member has that specific allergen explicitly recorded — the trigger lists describe what counts as that allergen, not a reason to scan all ingredients independently.
+5. Milk: milk, cream, butter, cheese, paneer, yogurt, whey, casein, lactose
+6. Eggs: eggs, egg white, egg yolk, mayonnaise
+7. Wheat/Gluten: wheat, flour, bread, pasta, oats, barley, rye, tortilla, wrap
+8. Peanuts: peanuts, peanut butter, peanut oil
+9. Tree nuts: almonds, cashews, walnuts, pecans, pistachios
+10. Include allergen-conflicting recipes but populate allergenWarnings fully
 
 INGREDIENT RULES - MUST FOLLOW:
 1. Composite packed ingredients must be ONE entry. Never split them (e.g. "Chipotle peppers in adobo" is one ingredient — never add a second entry for "Adobo sauce from the can").
