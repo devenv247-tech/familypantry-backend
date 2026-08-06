@@ -288,8 +288,8 @@ ALLERGEN RULES - MUST FOLLOW:
 3. If an ingredient contains or may contain an allergen that any member has, add it to allergenWarnings
 4. Example: if Member 1 has allergens=Milk and recipe uses "Homo Milk" → allergenWarnings should include: {"member": "Member 1", "allergen": "Milk", "ingredient": "Homo Milk"}
 5. CRITICAL: ONLY emit allergenWarnings for allergens EXPLICITLY listed in a member's profile. If a member has allergens=none or no allergens are recorded, emit ZERO warnings for that member. If no member profiles are provided, allergenWarnings must be an empty array. Never consult the trigger lists below unless the member has that specific allergen explicitly recorded — the trigger lists describe what counts as that allergen, not a reason to scan all ingredients independently.
-6. Milk allergen triggers on: milk, cream, butter, cheese, paneer, yogurt, whey, casein, lactose
-7. Eggs allergen triggers on: eggs, egg white, egg yolk, mayonnaise
+6. Milk allergen triggers on: milk, cream, butter, cheese, paneer, yogurt, whey, casein, lactose — mayonnaise is NOT a Milk allergen; never flag it under Milk
+7. Eggs allergen triggers on: eggs, egg white, egg yolk, mayonnaise, aioli, hollandaise — mayonnaise, aioli and egg-based sauces are EGG allergens only; a member with a Milk allergy has no conflict with them
 8. Wheat/Gluten allergen triggers on: wheat, flour, bread, pasta, oats, barley, rye, tortilla, wrap
 9. Peanuts allergen triggers on: peanuts, peanut butter, peanut oil
 10. Tree nuts allergen triggers on: almonds, cashews, walnuts, pecans, pistachios
@@ -475,8 +475,8 @@ ALLERGEN RULES - MUST FOLLOW:
 2. For EACH recipe, scan EVERY ingredient for allergen conflicts
 3. If an ingredient contains or may contain an allergen that any member has, add it to allergenWarnings
 4. CRITICAL: ONLY emit allergenWarnings for allergens EXPLICITLY listed in a member's profile. If a member has allergens=none or no allergens are recorded, emit ZERO warnings for that member. If no member profiles are provided, allergenWarnings must be an empty array. Never consult the trigger lists below unless the member has that specific allergen explicitly recorded — the trigger lists describe what counts as that allergen, not a reason to scan all ingredients independently.
-5. Milk allergen triggers on: milk, cream, butter, cheese, paneer, yogurt, whey, casein, lactose
-6. Eggs allergen triggers on: eggs, egg white, egg yolk, mayonnaise
+5. Milk allergen triggers on: milk, cream, butter, cheese, paneer, yogurt, whey, casein, lactose — mayonnaise is NOT a Milk allergen; never flag it under Milk
+6. Eggs allergen triggers on: eggs, egg white, egg yolk, mayonnaise, aioli, hollandaise — mayonnaise, aioli and egg-based sauces are EGG allergens only; a member with a Milk allergy has no conflict with them
 7. Wheat/Gluten allergen triggers on: wheat, flour, bread, pasta, oats, barley, rye, tortilla, wrap
 8. Peanuts allergen triggers on: peanuts, peanut butter, peanut oil
 9. Tree nuts allergen triggers on: almonds, cashews, walnuts, pecans, pistachios
@@ -887,8 +887,8 @@ ALLERGEN RULES - MUST FOLLOW:
 2. Scan every ingredient for allergen conflicts
 3. If an ingredient may trigger a member's allergen, add it to allergenWarnings
 4. CRITICAL: ONLY emit allergenWarnings for allergens EXPLICITLY listed in a member's profile. If a member has allergens=none or no allergens are recorded, emit ZERO warnings for that member. If no member profiles are provided, allergenWarnings must be an empty array.
-5. Milk: milk, cream, butter, cheese, paneer, yogurt, whey, casein, lactose
-6. Eggs: eggs, egg white, egg yolk, mayonnaise
+5. Milk: milk, cream, butter, cheese, paneer, yogurt, whey, casein, lactose — mayonnaise is NOT a Milk allergen; never flag it under Milk
+6. Eggs: eggs, egg white, egg yolk, mayonnaise, aioli, hollandaise — mayonnaise, aioli and egg-based sauces are EGG allergens only; a member with a Milk allergy has no conflict with them
 7. Wheat/Gluten: wheat, flour, bread, pasta, oats, barley, rye, tortilla, wrap
 8. Peanuts: peanuts, peanut butter, peanut oil
 9. Tree nuts: almonds, cashews, walnuts, pecans, pistachios
