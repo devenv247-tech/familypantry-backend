@@ -28,6 +28,40 @@ const callClaude = async (anthropic, params, endpoint) => {
   return message
 }
 
+// ─── Drop allergen warnings that are fabricated / reassurance entries ─────────
+const filterAllergenWarnings = (warnings, ingredients) => {
+  if (!Array.isArray(warnings) || warnings.length === 0) return []
+  const norm = s => s.toLowerCase().replace(/\s+/g, ' ').trim()
+  const ingNames = (ingredients || []).map(i =>
+    norm((typeof i === 'string' ? i : i.name) || '')
+  )
+  const FREE_RE = /dairy.?free|vegan|egg.?free|gluten.?free|nut.?free|lactose.?free|soy.?free/i
+  return warnings.filter(w => {
+    if (!w || typeof w.ingredient !== 'string') {
+      console.warn('[allergen-filter] dropped malformed warning:', JSON.stringify(w))
+      return false
+    }
+    const wIng = norm(w.ingredient)
+    if (!wIng || wIng === 'none' || wIng.startsWith('none') || wIng.includes('are safe') || wIng.includes('free and safe')) {
+      console.warn(`[allergen-filter] dropped reassurance entry: ingredient="${w.ingredient}" member="${w.member}" allergen="${w.allergen}"`)
+      return false
+    }
+    if (wIng.length > 60) {
+      console.warn(`[allergen-filter] dropped sentence-length entry: ingredient="${w.ingredient}" member="${w.member}" allergen="${w.allergen}"`)
+      return false
+    }
+    if (FREE_RE.test(w.ingredient)) {
+      console.warn(`[allergen-filter] dropped allergen-free-labelled ingredient: ingredient="${w.ingredient}" member="${w.member}" allergen="${w.allergen}"`)
+      return false
+    }
+    if (!ingNames.some(n => n && (n.includes(wIng) || wIng.includes(n)))) {
+      console.warn(`[allergen-filter] dropped unmatched ingredient: ingredient="${w.ingredient}" member="${w.member}" allergen="${w.allergen}"`)
+      return false
+    }
+    return true
+  })
+}
+
 // ─── Fuzzy pantry name matcher ────────────────────────────────────────────────
 const nameMatchesPantry = (missingName, pantryItems) => {
   const norm = s => s.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim()
@@ -233,6 +267,9 @@ ALLERGEN RULES - MUST FOLLOW:
 9. Peanuts allergen triggers on: peanuts, peanut butter, peanut oil
 10. Tree nuts allergen triggers on: almonds, cashews, walnuts, pecans, pistachios
 11. Even if a recipe has allergen conflicts, still suggest it but populate allergenWarnings fully
+12. allergenWarnings must contain ONLY actual ingredient conflicts. If a member's allergen is not present in ANY recipe ingredient, return an empty array — NEVER a reassurance entry.
+13. The "ingredient" field must be the exact name of one specific ingredient from the recipe. Never write a sentence, never write "None", never write any explanation.
+14. Do NOT flag an ingredient whose name already excludes the allergen (e.g. "dairy-free dark chocolate", "vegan butter", "egg-free pasta", "gluten-free flour", "nut-free pesto").
 VARIETY RULES - MUST FOLLOW:
 1. The 3 recipes MUST use different cooking methods (e.g. one grilled/roasted, one curry/braised, one stir-fried/pan-seared)
 2. Do NOT default to the most famous or obvious dish. If Indian cuisine, do NOT suggest Butter Chicken unless no other option exists
@@ -314,7 +351,12 @@ Respond ONLY with a valid JSON array, no other text:
         return !nameMatchesPantry(name, pantryItems)
       })
       // Hard cap at 5 missing items
-      return { ...recipe, missing: trulyMissing.slice(0, 5) }
+      // Belt-and-braces: drop fabricated/reassurance allergen warnings
+      return {
+        ...recipe,
+        missing: trulyMissing.slice(0, 5),
+        allergenWarnings: filterAllergenWarnings(recipe.allergenWarnings, recipe.ingredients),
+      }
     })
 
     // Sort by missing count ascending so recipe 1 always has fewest
@@ -411,6 +453,9 @@ ALLERGEN RULES - MUST FOLLOW:
 8. Peanuts allergen triggers on: peanuts, peanut butter, peanut oil
 9. Tree nuts allergen triggers on: almonds, cashews, walnuts, pecans, pistachios
 10. Even if a recipe has allergen conflicts, still suggest it but populate allergenWarnings fully
+11. allergenWarnings must contain ONLY actual ingredient conflicts. If a member's allergen is not present in ANY recipe ingredient, return an empty array — NEVER a reassurance entry.
+12. The "ingredient" field must be the exact name of one specific ingredient from the recipe. Never write a sentence, never write "None", never write any explanation.
+13. Do NOT flag an ingredient whose name already excludes the allergen (e.g. "dairy-free dark chocolate", "vegan butter", "egg-free pasta", "gluten-free flour", "nut-free pesto").
 
 VARIETY RULE: Do NOT default to famous or overused dishes (e.g. Butter Chicken for Indian cuisine). Choose a recipe that creatively uses pantry staples like grains, legumes, or vegetables already available. Prefer regional home-style dishes over restaurant classics.
 
@@ -481,6 +526,7 @@ Respond ONLY with a valid JSON object, no other text:
       })
     }
 
+    recipe.allergenWarnings = filterAllergenWarnings(recipe.allergenWarnings, recipe.ingredients)
     res.json({ recipe: substituteNames(recipe, nameMap) })
 
   } catch (err) {
@@ -735,10 +781,10 @@ exports.describeRecipe = async (req, res) => {
     const guardMsg = await callClaude(anthropic, {
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 5,
-      system: 'You are a topic classifier. Answer with a single word: YES or NO.',
+      system: 'You are a content filter for a cooking and meal planning app. Answer with a single word: YES or NO.',
       messages: [{
         role: 'user',
-        content: `Is this a request about food, cooking, recipes, ingredients, kitchen technique, or kitchen equipment? Reply YES or NO.\n\n"${promptTrimmed}"`,
+        content: `You are screening input for a cooking and meal planning app. Users often type short or vague requests like "something quick", "ideas for tonight", "what can I make", or terse dish names. Accept all food, cooking, recipe, ingredient, kitchen, meal, and nutrition input — including vague or short requests that could plausibly relate to food. Only reject input that is clearly about something unrelated to food or cooking (e.g. writing a cover letter, debugging code, planning travel, sports scores, financial advice). When in doubt, accept. Is this input acceptable for a cooking app? Reply YES or NO.\n\n"${promptTrimmed}"`,
       }],
     }, 'ask_nooka_guard')
 
@@ -784,6 +830,9 @@ ALLERGEN RULES - MUST FOLLOW:
 8. Peanuts: peanuts, peanut butter, peanut oil
 9. Tree nuts: almonds, cashews, walnuts, pecans, pistachios
 10. Include allergen-conflicting recipes but populate allergenWarnings fully
+11. allergenWarnings must contain ONLY actual ingredient conflicts. If a member's allergen is not present in ANY recipe ingredient, return an empty array — NEVER a reassurance entry.
+12. The "ingredient" field must be the exact name of one specific ingredient from the recipe. Never write a sentence, never write "None", never write any explanation.
+13. Do NOT flag an ingredient whose name already excludes the allergen (e.g. "dairy-free dark chocolate", "vegan butter", "egg-free pasta", "gluten-free flour", "nut-free pesto").
 
 INGREDIENT RULES - MUST FOLLOW:
 1. Composite packed ingredients must be ONE entry. Never split them (e.g. "Chipotle peppers in adobo" is one ingredient — never add a second entry for "Adobo sauce from the can").
@@ -850,6 +899,7 @@ Respond ONLY with valid raw JSON. No markdown, no backticks. Start with { end wi
       })
     }
 
+    recipe.allergenWarnings = filterAllergenWarnings(recipe.allergenWarnings, recipe.ingredients)
     const safeRecipe = substituteNames(recipe, nameMap)
     res.json({
       ...safeRecipe,
