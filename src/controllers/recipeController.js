@@ -4,6 +4,7 @@ const prisma = require('../utils/prisma')
 const { getMealPatternContext } = require('./mealPatternController')
 const { getSeasonalContext } = require('../utils/seasons')
 const { buildMemberTargets } = require('./healthTrackerController')
+const { buildAnonymizedProfiles, substituteNames } = require('../utils/memberAnonymizer')
 
 const PLAN_RANK = { free: 0, family: 1, premium: 2 }
 
@@ -145,14 +146,7 @@ exports.suggestRecipes = async (req, res) => {
       },
     })
 
-    const memberDetails = memberProfiles.map(m => {
-      const goals = m.goals || 'healthy eating'
-      const dietary = m.dietary || 'none'
-      const allergens = m.allergens || 'none'
-      const weight = m.weight ?`${m.weight}${m.weightUnit || 'kg'}` : 'unknown'
-      const height = m.height || 'unknown'
-      return `${m.name}: age=${m.age || 'unknown'}, weight=${weight}, height=${height}, health goals=${goals}, dietary restrictions=${dietary}, allergens=${allergens}`
-    }).join('; ')
+    const { profileText: memberDetails, nameMap } = buildAnonymizedProfiles(memberProfiles)
 
     // Goal-aware fitness injection (skipped silently on any error)
     let fitnessBlock = ''
@@ -321,6 +315,8 @@ Respond ONLY with a valid JSON array, no other text:
     // Sort by missing count ascending so recipe 1 always has fewest
     recipes.sort((a, b) => (a.missing?.length || 0) - (b.missing?.length || 0))
 
+    recipes = substituteNames(recipes, nameMap)
+
     // Increment recipe count for free plan
     if (family.plan === 'free') {
       await prisma.family.update({
@@ -383,9 +379,7 @@ exports.familyRecipe = async (req, res) => {
     
 const mealPatternContext = await getMealPatternContext(req.user.familyId)
 const seasonal = getSeasonalContext()
-const memberDetails = allMembers.map((m, i) =>
-  `Member ${i + 1}: age=${m.age || 'unknown'}, goal=${m.goals || 'healthy eating'}, dietary=${m.dietary || 'none'}, allergens=${m.allergens || 'none'}, weight=${m.weight || 'unknown'}`
-).join('; ')
+const { profileText: memberDetails, nameMap } = buildAnonymizedProfiles(allMembers)
 const prompt = `You are a family meal planning expert.
 
 Number of family members: ${allMembers.length}
@@ -429,7 +423,7 @@ Respond ONLY with a valid JSON object, no other text:
   "icon": "🍽️",
   "tags": ["tag1", "tag2"],
   "balanceNote": "Brief note on how this recipe balances everyone's needs",
-  "memberTips": [{"member": "name", "tip": "specific tip for this member"}],
+  "memberTips": [{"member": "Member 1", "tip": "specific tip for this member"}],
   "ingredients": [{"name": "Chicken", "quantity": 500, "unit": "g"}],
   "missing": [{"name": "Onion", "quantity": 2, "unit": "pcs"}],
  "steps": ["Step 1", "Step 2", "Step 3", "Step 4"],
@@ -481,7 +475,7 @@ Respond ONLY with a valid JSON object, no other text:
       })
     }
 
-    res.json({ recipe })
+    res.json({ recipe: substituteNames(recipe, nameMap) })
 
   } catch (err) {
     return handleAnthropicError(err, res)
@@ -757,9 +751,7 @@ exports.describeRecipe = async (req, res) => {
 
     const pantryList = pantryItems.map(i => `${i.name} (${i.quantity} ${i.unit})`).join(', ')
     const seasonal = getSeasonalContext()
-    const memberDetails = allMembers.map((m, i) =>
-      `Member ${i + 1}: age=${m.age || 'unknown'}, goal=${m.goals || 'healthy eating'}, dietary=${m.dietary || 'none'}, allergens=${m.allergens || 'none'}, weight=${m.weight || 'unknown'}`
-    ).join('; ')
+    const { profileText: memberDetails, nameMap } = buildAnonymizedProfiles(allMembers)
 
     const finalRequest = modifier?.trim()
       ? `${promptTrimmed}\nAdjustment: ${modifier.trim()}`
@@ -851,8 +843,9 @@ Respond ONLY with valid raw JSON. No markdown, no backticks. Start with { end wi
       })
     }
 
+    const safeRecipe = substituteNames(recipe, nameMap)
     res.json({
-      ...recipe,
+      ...safeRecipe,
       shoppingList,
       usage: family.plan === 'free' ? {
         used: (family.recipeWeek === currentWeek ? family.recipeCount : 0) + 1,
