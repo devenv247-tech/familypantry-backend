@@ -29,14 +29,31 @@ const callClaude = async (anthropic, params, endpoint) => {
 }
 
 // ─── Drop allergen warnings that are fabricated / reassurance entries ─────────
+// Keys are matched against the allergen label string (e.g. "Tree nuts"), NOT
+// the ingredient name. Ordering matters: more-specific keys must come before
+// overlapping less-specific ones ('shellfish' before 'fish', 'tree nut' before 'nut').
+// MUST stay in sync with the ALLERGENS constant in the frontend:
+//   src/pages/Settings.jsx
 const ALLERGEN_TRIGGER_MAP = new Map([
   ['milk',      /\b(milk|cream|butter|cheese|paneer|yogurt|whey|casein|lactose)\b/i],
-  ['egg',       /\b(eggs?|egg\s+white|egg\s+yolk|mayonnaise)\b/i],
+  ['egg',       /\b(eggs?|egg\s+white|egg\s+yolk|mayonnaise|aioli|hollandaise)\b/i],
+  ['shellfish', /\b(shellfish|shrimp|prawns?|lobster|crabs?|crayfish|crawfish|langoustine|scampi|langostino)\b/i],
+  ['fish',      /\b(fish|salmon|tuna|cod|halibut|tilapia|trout|sardines?|anchovies?|anchovy|mackerel|herring|bass|snapper|mahi|pollock|haddock|flounder|swordfish|catfish)\b/i],
+  ['mollusc',   /\b(oysters?|clams?|mussels?|squid|octopus|snails?|abalone|cockles?|periwinkle|whelks?|scallops?|cuttlefish)\b/i],
+  ['sesame',    /\b(sesame|tahini)\b/i],
+  ['soy',       /\b(soy|tofu|tempeh|edamame|miso|tamari)\b/i],
+  ['mustard',   /\b(mustard)\b/i],
+  ['celery',    /\b(celery|celeriac)\b/i],
+  ['lupin',     /\b(lupins?|lupine)\b/i],
   ['wheat',     /\b(wheat|flour|bread|pasta|oats|barley|rye|tortilla|wrap)\b/i],
   ['gluten',    /\b(wheat|flour|bread|pasta|oats|barley|rye|tortilla|wrap)\b/i],
-  ['peanut',    /\b(peanuts?|peanut\s+butter|peanut\s+oil)\b/i],
   ['tree nut',  /\b(almonds?|cashews?|walnuts?|pecans?|pistachios?)\b/i],
+  ['peanut',    /\b(peanuts?|peanut\s+butter|peanut\s+oil)\b/i],
   ['nut',       /\b(almonds?|cashews?|walnuts?|pecans?|pistachios?|peanuts?)\b/i],
+  // Sulphites intentionally omitted: sulphites appear as additives, not in
+  // ingredient names, so name-matching cannot validate them. Warnings for
+  // 'Sulphites' allergen pass through to the ingNames check (fail-open) and
+  // are logged below as unrecognized.
 ])
 
 // Returns true when the ingredient string offers at least one non-allergenic
@@ -80,6 +97,20 @@ const filterAllergenWarnings = (warnings, ingredients) => {
     if (hasNonAllergenicOrAlternative(w.ingredient, w.allergen)) {
       console.warn(`[allergen-filter] dropped "or"-alternative ingredient: ingredient="${w.ingredient}" member="${w.member}" allergen="${w.allergen}"`)
       return false
+    }
+    // Hard guarantee: the allergen's trigger word must appear literally in the ingredient name.
+    // This is the real safety net — the prompt is only the first line of defence.
+    const allergenNorm = norm(w.allergen || '')
+    let triggerRe = null
+    for (const [key, re] of ALLERGEN_TRIGGER_MAP) {
+      if (allergenNorm.includes(key)) { triggerRe = re; break }
+    }
+    if (triggerRe && !triggerRe.test(wIng)) {
+      console.warn(`[allergen-filter] dropped no-trigger-in-name: ingredient="${w.ingredient}" allergen="${w.allergen}" member="${w.member}"`)
+      return false
+    }
+    if (!triggerRe) {
+      console.warn(`[allergen-filter] unrecognized allergen, passing through: allergen="${w.allergen}" ingredient="${w.ingredient}" member="${w.member}"`)
     }
     if (!ingNames.some(n => n && (n.includes(wIng) || wIng.includes(n)))) {
       console.warn(`[allergen-filter] dropped unmatched ingredient: ingredient="${w.ingredient}" member="${w.member}" allergen="${w.allergen}"`)
@@ -285,16 +316,16 @@ ${seasonal.context}
 ALLERGEN RULES - MUST FOLLOW:
 1. Member allergens are listed in their profile as "allergens=X,Y,Z"
 2. For EACH recipe, scan EVERY ingredient for allergen conflicts
-3. If an ingredient contains or may contain an allergen that any member has, add it to allergenWarnings
+3. POSITIVE-EVIDENCE ONLY: An allergenWarning may ONLY be emitted when the ingredient name itself contains one of that allergen's trigger words. If the trigger word does not appear in the ingredient name, emit NO warning — regardless of what the ingredient might contain, be processed with, or resemble. Do not reason about hidden ingredients, cross-contamination, or manufacturing. Match the ingredient name text only.
 4. Example: if Member 1 has allergens=Milk and recipe uses "Homo Milk" → allergenWarnings should include: {"member": "Member 1", "allergen": "Milk", "ingredient": "Homo Milk"}
-5. CRITICAL: ONLY emit allergenWarnings for allergens EXPLICITLY listed in a member's profile. If a member has allergens=none or no allergens are recorded, emit ZERO warnings for that member. If no member profiles are provided, allergenWarnings must be an empty array. Never consult the trigger lists below unless the member has that specific allergen explicitly recorded — the trigger lists describe what counts as that allergen, not a reason to scan all ingredients independently.
-6. Milk allergen triggers on: milk, cream, butter, cheese, paneer, yogurt, whey, casein, lactose — mayonnaise is NOT a Milk allergen; never flag it under Milk
-7. Eggs allergen triggers on: eggs, egg white, egg yolk, mayonnaise, aioli, hollandaise — mayonnaise, aioli and egg-based sauces are EGG allergens only; a member with a Milk allergy has no conflict with them
-8. Wheat/Gluten allergen triggers on: wheat, flour, bread, pasta, oats, barley, rye, tortilla, wrap
-9. Peanuts allergen triggers on: peanuts, peanut butter, peanut oil
-10. Tree nuts allergen triggers on: almonds, cashews, walnuts, pecans, pistachios
+5. CRITICAL: ONLY emit allergenWarnings for allergens EXPLICITLY listed in a member's profile. If a member has allergens=none or no allergens are recorded, emit ZERO warnings for that member. If no member profiles are provided, allergenWarnings must be an empty array. Never consult the trigger lists below unless the member has that specific allergen explicitly recorded.
+6. Milk: flag ONLY if ingredient name contains: milk, cream, butter, cheese, paneer, yogurt, whey, casein, or lactose
+7. Eggs: flag ONLY if ingredient name contains: egg, egg white, egg yolk, mayonnaise, aioli, or hollandaise
+8. Wheat/Gluten: flag ONLY if ingredient name contains: wheat, flour, bread, pasta, oats, barley, rye, tortilla, or wrap
+9. Peanuts: flag ONLY if ingredient name contains: peanut, peanut butter, or peanut oil
+10. Tree nuts: flag ONLY if ingredient name contains: almond, cashew, walnut, pecan, or pistachio
 11. Even if a recipe has allergen conflicts, still suggest it but populate allergenWarnings fully
-12. allergenWarnings must contain ONLY actual ingredient conflicts. If a member's allergen is not present in ANY recipe ingredient, return an empty array — NEVER a reassurance entry.
+12. allergenWarnings must contain ONLY actual ingredient conflicts. If a member's allergen trigger word is not present in ANY recipe ingredient name, return an empty array — NEVER a reassurance entry.
 13. The "ingredient" field must be the exact name of one specific ingredient from the recipe. Never write a sentence, never write "None", never write any explanation.
 14. Do NOT flag an ingredient whose name already excludes the allergen (e.g. "dairy-free dark chocolate", "vegan butter", "egg-free pasta", "gluten-free flour", "nut-free pesto").
 15. Do NOT flag an ingredient whose name contains "or" offering a non-allergenic alternative (e.g. "Butter or neutral oil" for Milk allergen — the "or" makes it a choice, not a guaranteed conflict).
@@ -473,15 +504,15 @@ ${seasonal.context}
 ALLERGEN RULES - MUST FOLLOW:
 1. Member allergens are listed in their profile as "allergens=X,Y,Z"
 2. For EACH recipe, scan EVERY ingredient for allergen conflicts
-3. If an ingredient contains or may contain an allergen that any member has, add it to allergenWarnings
-4. CRITICAL: ONLY emit allergenWarnings for allergens EXPLICITLY listed in a member's profile. If a member has allergens=none or no allergens are recorded, emit ZERO warnings for that member. If no member profiles are provided, allergenWarnings must be an empty array. Never consult the trigger lists below unless the member has that specific allergen explicitly recorded — the trigger lists describe what counts as that allergen, not a reason to scan all ingredients independently.
-5. Milk allergen triggers on: milk, cream, butter, cheese, paneer, yogurt, whey, casein, lactose — mayonnaise is NOT a Milk allergen; never flag it under Milk
-6. Eggs allergen triggers on: eggs, egg white, egg yolk, mayonnaise, aioli, hollandaise — mayonnaise, aioli and egg-based sauces are EGG allergens only; a member with a Milk allergy has no conflict with them
-7. Wheat/Gluten allergen triggers on: wheat, flour, bread, pasta, oats, barley, rye, tortilla, wrap
-8. Peanuts allergen triggers on: peanuts, peanut butter, peanut oil
-9. Tree nuts allergen triggers on: almonds, cashews, walnuts, pecans, pistachios
+3. POSITIVE-EVIDENCE ONLY: An allergenWarning may ONLY be emitted when the ingredient name itself contains one of that allergen's trigger words. If the trigger word does not appear in the ingredient name, emit NO warning — regardless of what the ingredient might contain, be processed with, or resemble. Do not reason about hidden ingredients, cross-contamination, or manufacturing. Match the ingredient name text only.
+4. CRITICAL: ONLY emit allergenWarnings for allergens EXPLICITLY listed in a member's profile. If a member has allergens=none or no allergens are recorded, emit ZERO warnings for that member. If no member profiles are provided, allergenWarnings must be an empty array. Never consult the trigger lists below unless the member has that specific allergen explicitly recorded.
+5. Milk: flag ONLY if ingredient name contains: milk, cream, butter, cheese, paneer, yogurt, whey, casein, or lactose
+6. Eggs: flag ONLY if ingredient name contains: egg, egg white, egg yolk, mayonnaise, aioli, or hollandaise
+7. Wheat/Gluten: flag ONLY if ingredient name contains: wheat, flour, bread, pasta, oats, barley, rye, tortilla, or wrap
+8. Peanuts: flag ONLY if ingredient name contains: peanut, peanut butter, or peanut oil
+9. Tree nuts: flag ONLY if ingredient name contains: almond, cashew, walnut, pecan, or pistachio
 10. Even if a recipe has allergen conflicts, still suggest it but populate allergenWarnings fully
-11. allergenWarnings must contain ONLY actual ingredient conflicts. If a member's allergen is not present in ANY recipe ingredient, return an empty array — NEVER a reassurance entry.
+11. allergenWarnings must contain ONLY actual ingredient conflicts. If a member's allergen trigger word is not present in ANY recipe ingredient name, return an empty array — NEVER a reassurance entry.
 12. The "ingredient" field must be the exact name of one specific ingredient from the recipe. Never write a sentence, never write "None", never write any explanation.
 13. Do NOT flag an ingredient whose name already excludes the allergen (e.g. "dairy-free dark chocolate", "vegan butter", "egg-free pasta", "gluten-free flour", "nut-free pesto").
 14. Do NOT flag an ingredient whose name contains "or" offering a non-allergenic alternative (e.g. "Butter or neutral oil" for Milk allergen — the "or" makes it a choice, not a guaranteed conflict).
@@ -885,13 +916,13 @@ SHAPE B — type: "recipe"
 ALLERGEN RULES - MUST FOLLOW:
 1. Member allergens are in their profile as "allergens=X,Y,Z"
 2. Scan every ingredient for allergen conflicts
-3. If an ingredient may trigger a member's allergen, add it to allergenWarnings
+3. POSITIVE-EVIDENCE ONLY: An allergenWarning may ONLY be emitted when the ingredient name itself contains one of that allergen's trigger words. If the trigger word does not appear in the ingredient name, emit NO warning — regardless of what the ingredient might contain, be processed with, or resemble. Do not reason about hidden ingredients, cross-contamination, or manufacturing. Match the ingredient name text only.
 4. CRITICAL: ONLY emit allergenWarnings for allergens EXPLICITLY listed in a member's profile. If a member has allergens=none or no allergens are recorded, emit ZERO warnings for that member. If no member profiles are provided, allergenWarnings must be an empty array.
-5. Milk: milk, cream, butter, cheese, paneer, yogurt, whey, casein, lactose — mayonnaise is NOT a Milk allergen; never flag it under Milk
-6. Eggs: eggs, egg white, egg yolk, mayonnaise, aioli, hollandaise — mayonnaise, aioli and egg-based sauces are EGG allergens only; a member with a Milk allergy has no conflict with them
-7. Wheat/Gluten: wheat, flour, bread, pasta, oats, barley, rye, tortilla, wrap
-8. Peanuts: peanuts, peanut butter, peanut oil
-9. Tree nuts: almonds, cashews, walnuts, pecans, pistachios
+5. Milk: flag ONLY if ingredient name contains: milk, cream, butter, cheese, paneer, yogurt, whey, casein, or lactose
+6. Eggs: flag ONLY if ingredient name contains: egg, egg white, egg yolk, mayonnaise, aioli, or hollandaise
+7. Wheat/Gluten: flag ONLY if ingredient name contains: wheat, flour, bread, pasta, oats, barley, rye, tortilla, or wrap
+8. Peanuts: flag ONLY if ingredient name contains: peanut, peanut butter, or peanut oil
+9. Tree nuts: flag ONLY if ingredient name contains: almond, cashew, walnut, pecan, or pistachio
 10. Include allergen-conflicting recipes but populate allergenWarnings fully
 11. allergenWarnings must contain ONLY actual ingredient conflicts — NEVER a reassurance entry.
 12. The "ingredient" field must be the exact name of one specific ingredient from the recipe. Never write a sentence, never write "None".
