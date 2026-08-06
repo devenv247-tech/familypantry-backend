@@ -838,7 +838,7 @@ INGREDIENT RULES - MUST FOLLOW:
 1. Composite packed ingredients must be ONE entry. Never split them (e.g. "Chipotle peppers in adobo" is one ingredient — never add a second entry for "Adobo sauce from the can").
 2. Ingredient name must be a clean noun phrase. No parenthetical prep notes — no "(from pantry)", "(sliced into rounds)", "(to thin if needed)", "(ground or lightly toasted)". Prep belongs in steps.
 3. Use generic ingredient names even when the pantry lists a specific brand. Write "Mayonnaise" not "Hellmann's Real Mayonnaise", "Olive oil" not "Bertolli Olive Oil".
-4. Steps must never reference family members by placeholder. Never write "set aside for Member 1 (age 1)". Describe dietary modifications generically: "set aside a mild unseasoned portion for young children".
+4. Steps must never reference family members by name or placeholder label (e.g. "Member 1", "Person A"). If a dietary modification is genuinely required by the recipe, describe it in neutral culinary terms without naming any member.
 
 YIELD AND NUTRITION BASIS - MUST FOLLOW:
 - "yield" describes the natural output: "serves 4", "about 2 cups", "12 cookies", "1 loaf"
