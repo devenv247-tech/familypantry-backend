@@ -231,6 +231,8 @@ ALLERGEN RULES - STRICTLY FOLLOW:
 5. Peanuts: no peanuts, peanut butter, peanut oil
 6. Tree nuts: no almonds, cashews, walnuts, pecans, pistachios
 7. Even if recipe has allergen conflict, still include it but populate allergenWarnings fully
+8. Do NOT flag an ingredient whose name already excludes the allergen (e.g. "dairy-free dark chocolate", "vegan butter", "gluten-free flour").
+9. Do NOT flag an ingredient whose name contains "or" offering a non-allergenic alternative (e.g. "Butter or neutral oil" for Milk allergen — the "or" makes it a choice, not a guaranteed conflict).
 
 QUALITY RULES - VERY IMPORTANT:
 - Every meal MUST have recipeName — never leave it blank or use "Leftover X"

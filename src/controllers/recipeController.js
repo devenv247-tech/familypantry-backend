@@ -29,6 +29,29 @@ const callClaude = async (anthropic, params, endpoint) => {
 }
 
 // ─── Drop allergen warnings that are fabricated / reassurance entries ─────────
+const ALLERGEN_TRIGGER_MAP = new Map([
+  ['milk',      /\b(milk|cream|butter|cheese|paneer|yogurt|whey|casein|lactose)\b/i],
+  ['egg',       /\b(eggs?|egg\s+white|egg\s+yolk|mayonnaise)\b/i],
+  ['wheat',     /\b(wheat|flour|bread|pasta|oats|barley|rye|tortilla|wrap)\b/i],
+  ['gluten',    /\b(wheat|flour|bread|pasta|oats|barley|rye|tortilla|wrap)\b/i],
+  ['peanut',    /\b(peanuts?|peanut\s+butter|peanut\s+oil)\b/i],
+  ['tree nut',  /\b(almonds?|cashews?|walnuts?|pecans?|pistachios?)\b/i],
+  ['nut',       /\b(almonds?|cashews?|walnuts?|pecans?|pistachios?|peanuts?)\b/i],
+])
+
+// Returns true when the ingredient string offers at least one non-allergenic
+// option via "or" (e.g. "Butter or neutral oil" for a Milk allergen).
+const hasNonAllergenicOrAlternative = (ingredient, allergen) => {
+  if (!/\bor\b/i.test(ingredient)) return false
+  const allergenLower = (allergen || '').toLowerCase()
+  let triggerRe = null
+  for (const [key, re] of ALLERGEN_TRIGGER_MAP) {
+    if (allergenLower.includes(key)) { triggerRe = re; break }
+  }
+  if (!triggerRe) return false
+  return ingredient.split(/\s+or\s+/i).some(part => !triggerRe.test(part.trim()))
+}
+
 const filterAllergenWarnings = (warnings, ingredients) => {
   if (!Array.isArray(warnings) || warnings.length === 0) return []
   const norm = s => s.toLowerCase().replace(/\s+/g, ' ').trim()
@@ -52,6 +75,10 @@ const filterAllergenWarnings = (warnings, ingredients) => {
     }
     if (FREE_RE.test(w.ingredient)) {
       console.warn(`[allergen-filter] dropped allergen-free-labelled ingredient: ingredient="${w.ingredient}" member="${w.member}" allergen="${w.allergen}"`)
+      return false
+    }
+    if (hasNonAllergenicOrAlternative(w.ingredient, w.allergen)) {
+      console.warn(`[allergen-filter] dropped "or"-alternative ingredient: ingredient="${w.ingredient}" member="${w.member}" allergen="${w.allergen}"`)
       return false
     }
     if (!ingNames.some(n => n && (n.includes(wIng) || wIng.includes(n)))) {
@@ -270,6 +297,7 @@ ALLERGEN RULES - MUST FOLLOW:
 12. allergenWarnings must contain ONLY actual ingredient conflicts. If a member's allergen is not present in ANY recipe ingredient, return an empty array — NEVER a reassurance entry.
 13. The "ingredient" field must be the exact name of one specific ingredient from the recipe. Never write a sentence, never write "None", never write any explanation.
 14. Do NOT flag an ingredient whose name already excludes the allergen (e.g. "dairy-free dark chocolate", "vegan butter", "egg-free pasta", "gluten-free flour", "nut-free pesto").
+15. Do NOT flag an ingredient whose name contains "or" offering a non-allergenic alternative (e.g. "Butter or neutral oil" for Milk allergen — the "or" makes it a choice, not a guaranteed conflict).
 VARIETY RULES - MUST FOLLOW:
 1. The 3 recipes MUST use different cooking methods (e.g. one grilled/roasted, one curry/braised, one stir-fried/pan-seared)
 2. Do NOT default to the most famous or obvious dish. If Indian cuisine, do NOT suggest Butter Chicken unless no other option exists
@@ -456,6 +484,7 @@ ALLERGEN RULES - MUST FOLLOW:
 11. allergenWarnings must contain ONLY actual ingredient conflicts. If a member's allergen is not present in ANY recipe ingredient, return an empty array — NEVER a reassurance entry.
 12. The "ingredient" field must be the exact name of one specific ingredient from the recipe. Never write a sentence, never write "None", never write any explanation.
 13. Do NOT flag an ingredient whose name already excludes the allergen (e.g. "dairy-free dark chocolate", "vegan butter", "egg-free pasta", "gluten-free flour", "nut-free pesto").
+14. Do NOT flag an ingredient whose name contains "or" offering a non-allergenic alternative (e.g. "Butter or neutral oil" for Milk allergen — the "or" makes it a choice, not a guaranteed conflict).
 
 VARIETY RULE: Do NOT default to famous or overused dishes (e.g. Butter Chicken for Indian cuisine). Choose a recipe that creatively uses pantry staples like grains, legumes, or vegetables already available. Prefer regional home-style dishes over restaurant classics.
 
@@ -833,6 +862,7 @@ ALLERGEN RULES - MUST FOLLOW:
 11. allergenWarnings must contain ONLY actual ingredient conflicts. If a member's allergen is not present in ANY recipe ingredient, return an empty array — NEVER a reassurance entry.
 12. The "ingredient" field must be the exact name of one specific ingredient from the recipe. Never write a sentence, never write "None", never write any explanation.
 13. Do NOT flag an ingredient whose name already excludes the allergen (e.g. "dairy-free dark chocolate", "vegan butter", "egg-free pasta", "gluten-free flour", "nut-free pesto").
+14. Do NOT flag an ingredient whose name contains "or" offering a non-allergenic alternative (e.g. "Butter or neutral oil" for Milk allergen — the "or" makes it a choice, not a guaranteed conflict).
 
 INGREDIENT RULES - MUST FOLLOW:
 1. Composite packed ingredients must be ONE entry. Never split them (e.g. "Chipotle peppers in adobo" is one ingredient — never add a second entry for "Adobo sauce from the can").
