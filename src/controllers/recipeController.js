@@ -838,7 +838,7 @@ exports.describeRecipe = async (req, res) => {
       ? `${promptTrimmed}\nAdjustment: ${modifier.trim()}`
       : promptTrimmed
 
-    const mainPrompt = `You are a recipe assistant for a Canadian family cooking app.
+    const mainPrompt = `You are a recipe and cooking assistant for a Canadian family cooking app.
 
 User's request: ${finalRequest}
 
@@ -848,21 +848,55 @@ ${mealPatternContext}
 SEASONAL GUIDANCE:
 ${seasonal.context}
 
+STEP 1 — CLASSIFY THE REQUEST
+Decide which type applies and set "type" accordingly. Return ONLY one of these two shapes.
+
+  "recipe" — anything with ingredients that get combined into a dish: meals, sauces, condiments,
+             spice blends, drinks, baked goods.
+
+  "guide"  — technique, equipment, troubleshooting, or knowledge questions where the answer is
+             not a dish: "how do I season a cast iron", "what equipment do I need for X",
+             "how do I fix soup that's too salty", "what's the difference between X and Y".
+
+When genuinely ambiguous, prefer "recipe".
+
+─────────────────────────────────────────────────────
+SHAPE A — type: "guide"
+─────────────────────────────────────────────────────
+{
+  "type": "guide",
+  "title": "...",
+  "description": "one or two sentences",
+  "icon": "single emoji",
+  "time": "1 hr" or null,
+  "difficulty": "Easy|Medium|Hard",
+  "tags": [...],
+  "equipment": [{ "item": "...", "purpose": "one or two sentences", "required": true }],
+  "steps": ["..."],
+  "tips": ["..."]
+}
+equipment and tips may be empty arrays when not relevant.
+CRITICAL: guides must NOT include: ingredients, nutrition, nutritionBasis, yield, shoppingList, allergenWarnings.
+
+─────────────────────────────────────────────────────
+SHAPE B — type: "recipe"
+─────────────────────────────────────────────────────
+
 ALLERGEN RULES - MUST FOLLOW:
 1. Member allergens are in their profile as "allergens=X,Y,Z"
 2. Scan every ingredient for allergen conflicts
 3. If an ingredient may trigger a member's allergen, add it to allergenWarnings
-4. CRITICAL: ONLY emit allergenWarnings for allergens EXPLICITLY listed in a member's profile. If a member has allergens=none or no allergens are recorded, emit ZERO warnings for that member. If no member profiles are provided, allergenWarnings must be an empty array. Never consult the trigger lists below unless the member has that specific allergen explicitly recorded — the trigger lists describe what counts as that allergen, not a reason to scan all ingredients independently.
+4. CRITICAL: ONLY emit allergenWarnings for allergens EXPLICITLY listed in a member's profile. If a member has allergens=none or no allergens are recorded, emit ZERO warnings for that member. If no member profiles are provided, allergenWarnings must be an empty array.
 5. Milk: milk, cream, butter, cheese, paneer, yogurt, whey, casein, lactose
 6. Eggs: eggs, egg white, egg yolk, mayonnaise
 7. Wheat/Gluten: wheat, flour, bread, pasta, oats, barley, rye, tortilla, wrap
 8. Peanuts: peanuts, peanut butter, peanut oil
 9. Tree nuts: almonds, cashews, walnuts, pecans, pistachios
 10. Include allergen-conflicting recipes but populate allergenWarnings fully
-11. allergenWarnings must contain ONLY actual ingredient conflicts. If a member's allergen is not present in ANY recipe ingredient, return an empty array — NEVER a reassurance entry.
-12. The "ingredient" field must be the exact name of one specific ingredient from the recipe. Never write a sentence, never write "None", never write any explanation.
+11. allergenWarnings must contain ONLY actual ingredient conflicts — NEVER a reassurance entry.
+12. The "ingredient" field must be the exact name of one specific ingredient from the recipe. Never write a sentence, never write "None".
 13. Do NOT flag an ingredient whose name already excludes the allergen (e.g. "dairy-free dark chocolate", "vegan butter", "egg-free pasta", "gluten-free flour", "nut-free pesto").
-14. Do NOT flag an ingredient whose name contains "or" offering a non-allergenic alternative (e.g. "Butter or neutral oil" for Milk allergen — the "or" makes it a choice, not a guaranteed conflict).
+14. Do NOT flag an ingredient whose name contains "or" offering a non-allergenic alternative (e.g. "Butter or neutral oil" for Milk allergen).
 
 INGREDIENT RULES - MUST FOLLOW:
 1. Composite packed ingredients must be ONE entry. Never split them (e.g. "Chipotle peppers in adobo" is one ingredient — never add a second entry for "Adobo sauce from the can").
@@ -874,9 +908,8 @@ YIELD AND NUTRITION BASIS - MUST FOLLOW:
 - "yield" describes the natural output: "serves 4", "about 2 cups", "12 cookies", "1 loaf"
 - "nutritionBasis" must agree with yield: "per serving", "per tbsp", "per cookie"
 - A sauce or condiment must NOT claim "serves 4" — use a volume or piece unit instead
-- Scale ingredient quantities to match what the user asked for (e.g. "for 15 people" → yield "serves 15")
+- Scale ingredient quantities to match what the user asked for
 
-Respond ONLY with valid raw JSON. No markdown, no backticks. Start with { end with }:
 {
   "type": "recipe",
   "name": "Recipe name",
@@ -888,10 +921,14 @@ Respond ONLY with valid raw JSON. No markdown, no backticks. Start with { end wi
   "nutritionBasis": "per serving",
   "tags": ["High Protein", "Quick"],
   "ingredients": [{"name": "Chicken breast", "quantity": 500, "unit": "g"}],
+  "equipment": [{"item": "Cast iron pan", "purpose": "...", "required": true}],
   "steps": ["Step 1", "Step 2", "Step 3", "Step 4"],
   "nutrition": {"calories": 450, "protein": 35, "carbs": 30, "fat": 12, "fiber": 4},
   "allergenWarnings": [{"member": "Member 1", "allergen": "Milk", "ingredient": "Butter"}]
-}`
+}
+equipment is optional — omit it entirely for dishes needing nothing unusual.
+
+Respond ONLY with valid raw JSON. No markdown, no backticks. Start with { end with }.`
 
     const message = await callClaude(anthropic, {
       model: 'claude-sonnet-4-6',
@@ -911,7 +948,39 @@ Respond ONLY with valid raw JSON. No markdown, no backticks. Start with { end wi
       return res.status(500).json({ error: 'Failed to parse recipe response. Please try again.' })
     }
 
-    // Shopping list — ingredients not in pantry, excluding staples nobody shops for
+    const usagePayload = family.plan === 'free' ? {
+      used: (family.recipeWeek === currentWeek ? family.recipeCount : 0) + 1,
+      limit: 5,
+      plan: 'free',
+    } : { plan: family.plan }
+
+    if (recipe.type === 'guide') {
+      // Whitelist only guide fields — strip any recipe-only fields the model emitted anyway
+      const GUIDE_FIELDS = new Set(['type', 'title', 'description', 'icon', 'time', 'difficulty', 'tags', 'equipment', 'steps', 'tips'])
+      const safeGuide = {}
+      for (const key of GUIDE_FIELDS) {
+        if (recipe[key] !== undefined) safeGuide[key] = recipe[key]
+      }
+      // Normalize type — never trust whatever string the model emitted (e.g. "equipment")
+      safeGuide.type     = 'guide'
+      safeGuide.equipment = Array.isArray(safeGuide.equipment) ? safeGuide.equipment : []
+      safeGuide.tips      = Array.isArray(safeGuide.tips)      ? safeGuide.tips      : []
+      safeGuide.tags      = Array.isArray(safeGuide.tags)      ? safeGuide.tags      : []
+      safeGuide.steps     = Array.isArray(safeGuide.steps)     ? safeGuide.steps     : []
+
+      if (family.plan === 'free') {
+        await prisma.family.update({
+          where: { id: family.id },
+          data: { recipeCount: { increment: 1 }, recipeWeek: currentWeek },
+        })
+      }
+
+      return res.json({ ...substituteNames(safeGuide, nameMap), usage: usagePayload })
+    }
+
+    // type === 'recipe', or missing / any other value — normalize and process as recipe
+    recipe.type = 'recipe'
+
     const SHOPPING_EXCLUDE = /^(water|ice|salt)$/i
     const shoppingList = (recipe.ingredients || [])
       .filter(ing => !nameMatchesPantry(ing.name, pantryItems))
@@ -922,24 +991,12 @@ Respond ONLY with valid raw JSON. No markdown, no backticks. Start with { end wi
     if (family.plan === 'free') {
       await prisma.family.update({
         where: { id: family.id },
-        data: {
-          recipeCount: { increment: 1 },
-          recipeWeek: currentWeek,
-        },
+        data: { recipeCount: { increment: 1 }, recipeWeek: currentWeek },
       })
     }
 
     recipe.allergenWarnings = filterAllergenWarnings(recipe.allergenWarnings, recipe.ingredients)
-    const safeRecipe = substituteNames(recipe, nameMap)
-    res.json({
-      ...safeRecipe,
-      shoppingList,
-      usage: family.plan === 'free' ? {
-        used: (family.recipeWeek === currentWeek ? family.recipeCount : 0) + 1,
-        limit: 5,
-        plan: 'free',
-      } : { plan: family.plan },
-    })
+    res.json({ ...substituteNames(recipe, nameMap), shoppingList, usage: usagePayload })
 
   } catch (err) {
     return handleAnthropicError(err, res)
